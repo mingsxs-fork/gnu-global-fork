@@ -69,3 +69,4 @@ htags/completion.cgi
 htags/global.cgi
 htags/htags
 **/.libs
+**/*.dis
