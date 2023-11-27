@@ -54,9 +54,11 @@ dkms.conf
 **/.deps
 **/Makefile
 Doxyfile
-config.*
 stamp-h1
 **/.dirstamp
+config.h
+config.status
+config.log
 
 # compiled binaries
 libtool
