@@ -507,8 +507,8 @@ gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const cha
 			if (entry->value == NULL)
 				entry->value = varray_open(sizeof(int), 100);
 			*(int *)varray_append((VARRAY *)entry->value) = lno;
+			return;
 		}
-		return;
 	}
 	/*
 	 * extract method when class method definition.
@@ -1199,8 +1199,5 @@ segment_read(GTOP *gtop)
 int
 gtags_exists(GTOP *gtop, const char *tag)
 {
-	if (gtop->db == GTAGS && strhash_assign(gtop->path_hash, tag, 0) != NULL) {
-		return 1;
-	}
-	return 0;
+	return (gtop->db == GTAGS && strhash_assign(gtop->path_hash, tag, 0) != NULL) ? 1 : 0;
 }
