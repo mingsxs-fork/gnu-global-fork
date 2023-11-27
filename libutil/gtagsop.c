@@ -61,6 +61,7 @@
 #include "varray.h"
 
 #define HASHBUCKETS	2048
+#define HASH_ENTRY_MAX	50000
 
 static int compare_path(const void *, const void *);
 static int compare_lineno(const void *, const void *);
@@ -490,7 +491,7 @@ gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const cha
 {
 	const char *key;
 
-	if (gtop->format & GTAGS_COMPACT || gtop->db == GTAGS) {
+	if (gtop->format & GTAGS_COMPACT || (gtop->db == GTAGS && gtop->path_hash->entries < HASH_ENTRY_MAX)) {
 		/*
 		 * Register each record into the pool.
 		 *
@@ -1199,5 +1200,8 @@ segment_read(GTOP *gtop)
 int
 gtags_exists(GTOP *gtop, const char *tag)
 {
-	return (gtop->db == GTAGS && strhash_assign(gtop->path_hash, tag, 0) != NULL) ? 1 : 0;
+	if (gtop->db == GTAGS)
+		if (strhash_assign(gtop->path_hash, tag, 0) || gtop->path_hash->entries >= HASH_ENTRY_MAX)
+			return 1;
+	return 0;
 }
