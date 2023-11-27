@@ -392,6 +392,55 @@ dbop_put(DBOP *dbop, const char *name, const char *data)
 		die("%s", dbop->put_errmsg ? dbop->put_errmsg : "dbop_put failed.");
 	}
 }
+
+/**
+ * dbop_put_any: put data with any size by a key.
+ *
+ *	@param[in]	dbop	descripter
+ *	@param[in]	name	key
+ *	@param[in]	data	user data region
+ *	@param[in]	size	user data size in bytes
+ */
+void
+dbop_put_any(DBOP *dbop, const char *name, void *data, size_t size)
+{
+	DB *db = dbop->db;
+	DBT key, dat;
+	int status, len;
+#ifdef USE_SQLITE3
+	if (dbop->openflags & DBOP_SQLITE3) {
+		dbop3_put(dbop, name, data, NULL);
+		return;
+	}
+#endif
+	if (!(len = strlen(name)))
+		die("primary key size == 0.");
+	if (len > MAXKEYLEN)
+		die("primary key too long.");
+	/* sorted writing */
+	if (dbop->sortout) {
+		fputs(name, dbop->sortout);
+		putc(SORT_SEP, dbop->sortout);
+		while (size-- > 0)  /* treat as string buffer */
+			putc(*(char *)data++, dbop->sortout);
+		putc('\n', dbop->sortout);
+		return;
+	}
+	key.data = (char *)name;
+	key.size = len + 1;
+	dat.data = (void *)data;
+	dat.size = size;
+
+	status = (*db->put)(db, &key, &dat, 0);
+	switch (status) {
+	case RET_SUCCESS:
+		return;
+	case RET_ERROR:
+	case RET_SPECIAL:
+		die("%s", dbop->put_errmsg ? dbop->put_errmsg : "dbop_put_any failed.");
+	}
+}
+
 /**
  * dbop_put_tag: put a tag
  *
@@ -522,6 +571,22 @@ dbop_update(DBOP *dbop, const char *key, const char *dat)
 		return dbop3_update(dbop, key, dat);
 #endif
 	dbop_put(dbop, key, dat);
+}
+/**
+ * dbop_update_any: update record with any size.
+ *
+ *	@param[in]	dbop	descripter
+ *	@param[in]	key	key
+ *	@param[in]	dat	data
+ */
+void
+dbop_update_any(DBOP *dbop, const char *key, void *dat, size_t size)
+{
+#ifdef USE_SQLITE3
+	if (dbop->openflags & DBOP_SQLITE3)
+		return dbop3_update(dbop, key, dat);
+#endif
+	dbop_put_any(dbop, key, dat, size);
 }
 /**
  * dbop_first: get first record. 

@@ -556,8 +556,8 @@ out:
  * skips '.', '..'.
  * It also skips '.xxxx' and tag files for performance.
  */
-static int
-ignore(const char *path)
+int
+ignore_path(const char *path)
 {
 	int db;
 
@@ -603,7 +603,7 @@ getdirs(const char *dir, STRBUF *sb)
 		return -1;
 	}
 	while ((dp = readdir(dirp)) != NULL) {
-		if (ignore(dp->d_name))
+		if (ignore_path(dp->d_name))
 			continue;
 		if (stat(makepath(dir, dp->d_name, NULL), &st) < 0) {
 			warning("cannot stat '%s'. ignored.", trimpath(dp->d_name));
@@ -673,6 +673,11 @@ set_skip_unreadable(void)
 {
 	skip_unreadable = 1;
 }
+int
+get_skip_unreadable(void)
+{
+	return skip_unreadable;
+}
 /**
  * set_skip_symlink: set rules for symbolic links.
  *
@@ -685,6 +690,11 @@ void
 set_skip_symlink(int mode)
 {
 	skip_symlink = mode;
+}
+int
+get_skip_symlink(void)
+{
+	return skip_symlink;
 }
 /**
  * find_open: start iterator without GPATH.
@@ -763,9 +773,7 @@ find_open_filelist(const char *filename, const char *root, int explain)
 	 * ofcourse.
 	 */
 	rootdir_len = strlen(root) + 2;
-	rootdir = malloc(rootdir_len);
-	if (!rootdir)
-		die("short of memory.");
+	rootdir = check_malloc(rootdir_len);
 
 	snprintf(rootdir, rootdir_len, "%s%s", root,
 		 strcmp(root+ROOT, "/") ? "/" : "");

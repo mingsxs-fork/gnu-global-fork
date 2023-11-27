@@ -27,9 +27,12 @@
 
 void set_accept_dotfiles(void);
 void set_skip_unreadable(void);
+int get_skip_unreadable(void);
 void set_skip_symlink(int);
+int get_skip_symlink(void);
 int skipthisfile(const char *);
 int issourcefile(const char *);
+int ignore_path(const char *path);
 void find_open(const char *, int);
 void find_open_filelist(const char *, const char *, int);
 char *find_read(void);

@@ -51,6 +51,7 @@
 #include "strbuf.h"
 #include "strmake.h"
 #include "test.h"
+#include "path_tree.h"
 
 #define NOTFUNCTION	".notfunction"
 #ifdef __DJGPP__
@@ -413,10 +414,13 @@ void
 parse_file(const char *path, int flags, PARSER_CALLBACK put, void *arg)
 {
 	const struct lang_entry *ent = get_parser(path);
-	if (ent) {
+	int parse_state = get_file_parse_state(path);  /* check file parse state */
+	if (ent && parse_state == FILE_PARSE_NEW) {
 		if (flags & PARSER_EXPLAIN)
 			fputs(get_explain(path, ent), stderr);
+		set_file_parse_state(path, FILE_PARSE_PENDING);
 		execute_parser(ent, path, flags, put, arg);
+		set_file_parse_state(path, FILE_PARSE_DONE);
 	}
 }
 /**

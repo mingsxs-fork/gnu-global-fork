@@ -27,6 +27,9 @@
 #else
 #include <strings.h>
 #endif
+#ifdef STDC_HEADERS
+#include <stdlib.h>
+#endif
 #include <stdarg.h>
 
 #ifndef __attribute__
@@ -108,6 +111,26 @@ typedef struct _strbuf {
 		__strbuf_expandbuf(sb, _length - strbuf_getlen(sb));\
 } while (0)
 #define strbuf_lastchar(sb) (*(sb->curp - 1))
+#define strbuf_prependc(sb, c)	do {\
+	if (sb->curp >= sb->endp)\
+		__strbuf_expandbuf(sb, 0);\
+	memmove(sb->sbuf+1, sb->sbuf, strbuf_getlen(sb));\
+	*sb->sbuf = c;\
+	sb->curp++;\
+} while (0)
+
+#define strbuf_ltruncate(sb, size) do {\
+	if (size < strbuf_getlen(sb)) \
+		memmove(sb->sbuf, sb->sbuf+size, strbuf_getlen(sb)-size);\
+	else\
+		strbuf_reset(sb);\
+} while (0)
+#define strbuf_rtruncate(sb, size) do {\
+	if (size < strbuf_getlen(sb))\
+		sb->curp -= size;\
+	else\
+		strbuf_reset(sb);\
+} while (0)
 
 #ifdef DEBUG
 void strbuf_dump(char *);
@@ -126,6 +149,8 @@ void strbuf_putn64(STRBUF *, long long);
 int strbuf_unputc(STRBUF *, int);
 char *strbuf_value(STRBUF *);
 void strbuf_trim(STRBUF *);
+int strbuf_startswith(STRBUF *, const char *);
+int strbuf_endswith(STRBUF *, const char *);
 void strbuf_close(STRBUF *);
 char *strbuf_fgets(STRBUF *, FILE *, int);
 void strbuf_sprintf(STRBUF *, const char *, ...)
@@ -135,5 +160,6 @@ void strbuf_vsprintf(STRBUF *, const char *, va_list)
 STRBUF *strbuf_open_tempbuf(void);
 void strbuf_release_tempbuf(STRBUF *);
 char *next_string(char *);
+void strbuf_prepends(STRBUF *, const char *);
 
 #endif /* ! _STRBUF_H */

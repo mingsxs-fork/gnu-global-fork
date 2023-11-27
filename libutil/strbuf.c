@@ -531,3 +531,40 @@ next_string(char *p)
 		;
 	return p;
 }
+
+/**
+ * strbuf_prepends: prepend string to strbuf.
+ */
+void
+strbuf_prepends(STRBUF *sb, const char *s)
+{
+	unsigned int slen = strlen(s);
+	if (sb->curp + slen > sb->endp)
+		__strbuf_expandbuf(sb, slen);
+	memmove(sb->sbuf+slen, sb->sbuf, strbuf_getlen(sb));
+	memcpy(sb->sbuf, s, slen);
+	sb->curp += slen;
+}
+
+/**
+ * strbuf_startswith: check if strbuf starts with a specific prefix.
+ */
+int
+strbuf_startswith(STRBUF *sb, const char *s)
+{
+	char *p = sb->sbuf;
+	while (*p++ == *s++);
+	return *s == '\0' ? 1 : 0;
+}
+
+/**
+ * strbuf_endswith: check if strbuf ends with a specific suffix.
+ */
+int
+strbuf_endswith(STRBUF *sb, const char *s)
+{
+	char *p = sb->curp - 1;
+	const char *sp = s + strlen(s) - 1;
+	while (p >= sb->sbuf && sp >= s && *p-- == *sp--);
+	return sp == s ? 1 : 0;
+}

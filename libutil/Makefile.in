@@ -127,7 +127,8 @@ am_libgloutil_a_OBJECTS = assoc.$(OBJEXT) conf.$(OBJEXT) \
 	compress.$(OBJEXT) checkalloc.$(OBJEXT) pool.$(OBJEXT) \
 	fileop.$(OBJEXT) statistics.$(OBJEXT) args.$(OBJEXT) \
 	logging.$(OBJEXT) nearsort.$(OBJEXT) secure_popen.$(OBJEXT) \
-	convert.$(OBJEXT) output.$(OBJEXT) vstack.$(OBJEXT)
+	convert.$(OBJEXT) output.$(OBJEXT) vstack.$(OBJEXT) \
+	path_tree.$(OBJEXT) gtags_helper.$(OBJEXT)
 libgloutil_a_OBJECTS = $(am_libgloutil_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -164,7 +165,8 @@ am__depfiles_remade = ./$(DEPDIR)/abs2rel.Po ./$(DEPDIR)/args.Po \
 	./$(DEPDIR)/strmake.Po ./$(DEPDIR)/tab.Po ./$(DEPDIR)/test.Po \
 	./$(DEPDIR)/token.Po ./$(DEPDIR)/usable.Po \
 	./$(DEPDIR)/varray.Po ./$(DEPDIR)/version.Po \
-	./$(DEPDIR)/vstack.Po ./$(DEPDIR)/xargs.Po
+	./$(DEPDIR)/vstack.Po ./$(DEPDIR)/xargs.Po \
+	./$(DEPDIR)/path_tree.Po ./$(DEPDIR)/gtags_helper.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -427,7 +429,7 @@ strmake.h tab.h test.h token.h usable.h version.h is_unixy.h abs2rel.h \
 split.h strlimcpy.h linetable.h env.h char.h date.h langmap.h \
 varray.h idset.h strhash.h xargs.h format.h encodepath.h rewrite.h \
 compress.h checkalloc.h pool.h fileop.h statistics.h args.h logging.h nearsort.h \
-secure_popen.h convert.h output.h vstack.h
+secure_popen.h convert.h output.h vstack.h path_tree.h gtags_helper.h
 
 libgloutil_a_SOURCES = \
 assoc.c conf.c dbop.c defined.c die.c find.c getdbpath.c gtagsop.c locatestring.c \
@@ -435,7 +437,7 @@ makepath.c path.c gpathop.c strbuf.c strmake.c tab.c test.c \
 token.c usable.c version.c is_unixy.c abs2rel.c split.c strlimcpy.c linetable.c \
 env.c char.c date.c langmap.c varray.c idset.c strhash.c xargs.c encodepath.c rewrite.c \
 compress.c checkalloc.c pool.c fileop.c statistics.c args.c logging.c nearsort.c \
-secure_popen.c convert.c output.c vstack.c
+secure_popen.c convert.c output.c vstack.c path_tree.c gtags_helper.c
 
 libgloutil_a_DEPENDENCIES = $(libgloutil_a_LIBADD)
 man_MANS = gtags.conf.5
@@ -536,6 +538,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/version.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vstack.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xargs.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/path_tree.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gtags_helper.Po@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
 	@$(MKDIR_P) $(@D)
@@ -789,6 +793,8 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/version.Po
 	-rm -f ./$(DEPDIR)/vstack.Po
 	-rm -f ./$(DEPDIR)/xargs.Po
+	-rm -f ./$(DEPDIR)/path_tree.Po
+	-rm -f ./$(DEPDIR)/gtags_helper.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-tags
@@ -880,6 +886,8 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/version.Po
 	-rm -f ./$(DEPDIR)/vstack.Po
 	-rm -f ./$(DEPDIR)/xargs.Po
+	-rm -f ./$(DEPDIR)/path_tree.Po
+	-rm -f ./$(DEPDIR)/gtags_helper.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 

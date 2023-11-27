@@ -97,6 +97,7 @@ const char *dump_target;
 char *single_update;
 int statistics = STATISTICS_STYLE_NONE;
 int explain;
+static struct gtags_priv_data priv_data;
 #ifdef USE_SQLITE3
 int use_sqlite3;
 #endif
@@ -855,58 +856,6 @@ exit:
 	return updated;
 }
 /**
- * static void put_syms(int type, const char *tag, int lno, const char *path, const char *line_image, void *arg)
- *
- * callback functions for built-in parser
- */
-struct put_func_data {
-	GTOP *gtop[GTAGLIM];
-	const char *fid;
-};
-static void
-put_syms(int type, const char *tag, int lno, const char *path, const char *line_image, void *arg)
-{
-	const struct put_func_data *data = arg;
-	GTOP *gtop;
-	const char *p;
-
-	/*
-	 * sanity checks
-	 * These checks are required, because there is no telling what kind of string
-	 * comes as 'a symbol' from external plug-in parsers.
-	 */
-	for (p = tag; *p; p++) {
-		if (isspace(*p)) {
-			if (wflag)
-				warning("symbol name includs a space character. (Ignored) [+%d %s]", lno, path);
-			return;
-		}
-	}
-	if (p == tag) {
-		if (wflag)
-			warning("symbol name is null. (Ignored) [+%d %s]", lno, path);
-		return;
-	}
-	if (p - tag >= IDENTLEN) {
-		if (wflag)
-			warning("symbol name is too long. (Ignored) [+%d %s]", lno, path);
-		return;
-	}
-	switch (type) {
-	case PARSER_DEF:
-		gtop = data->gtop[GTAGS];
-		break;
-	case PARSER_REF_SYM:
-		gtop = data->gtop[GRTAGS];
-		if (gtop == NULL)
-			return;
-		break;
-	default:
-		return;
-	}
-	gtags_put_using(gtop, tag, lno, data->fid, line_image);
-}
-/**
  * updatetags: update tag file.
  *
  *	@param[in]	dbpath		directory in which tag file exist
@@ -917,24 +866,32 @@ put_syms(int type, const char *tag, int lno, const char *path, const char *line_
 void
 updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addlist)
 {
-	struct put_func_data data;
-	int seqno, flags;
+	int seqno;
 	const char *path, *start, *end;
+
+	reset_gtags_priv_data(priv_data);
+	priv_data.conf_data.vflag = vflag;
+	priv_data.conf_data.wflag = wflag;
+	priv_data.conf_data.qflag = qflag;
+	priv_data.conf_data.debug = debug;
+	priv_data.conf_data.iflag = iflag;
+	priv_data.conf_data.extractmethod = extractmethod;
+	priv_data.conf_data.explain = explain;
 
 	if (vflag)
 		fprintf(stderr, "[%s] Updating '%s' and '%s'.\n", now(), dbname(GTAGS), dbname(GRTAGS));
 	/*
 	 * Open tag files.
 	 */
-	data.gtop[GTAGS] = gtags_open(dbpath, root, GTAGS, GTAGS_MODIFY, 0);
+	priv_data.put_data.gtop[GTAGS] = gtags_open(dbpath, root, GTAGS, GTAGS_MODIFY, 0);
 	if (test("f", makepath(dbpath, dbname(GRTAGS), NULL))) {
-		data.gtop[GRTAGS] = gtags_open(dbpath, root, GRTAGS, GTAGS_MODIFY, 0);
+		priv_data.put_data.gtop[GRTAGS] = gtags_open(dbpath, root, GRTAGS, GTAGS_MODIFY, 0);
 	} else {
 		/*
-		 * If you set NULL to data.gtop[GRTAGS], parse_file() doesn't write to
-		 * GRTAGS. See put_syms().
+		 * If you set NULL to priv_data.put_data.gtop[GRTAGS], parse_file() doesn't write to
+		 * GRTAGS. See gtags_put_symbol().
 		 */
-		data.gtop[GRTAGS] = NULL;
+		priv_data.put_data.gtop[GRTAGS] = NULL;
 	}
 	/*
 	 * Delete tags from GTAGS.
@@ -954,28 +911,27 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 				fprintf(stderr, " [%d/%d] deleting tags of %s\n", seqno++, total, path + 2);
 			}
 		}
-		gtags_delete(data.gtop[GTAGS], deleteset);
-		if (data.gtop[GRTAGS] != NULL)
-			gtags_delete(data.gtop[GRTAGS], deleteset);
+		gtags_delete(priv_data.put_data.gtop[GTAGS], deleteset);
+		if (priv_data.put_data.gtop[GRTAGS] != NULL)
+			gtags_delete(priv_data.put_data.gtop[GRTAGS], deleteset);
 	}
 	/*
 	 * Set flags.
 	 */
-	data.gtop[GTAGS]->flags = 0;
+	priv_data.put_data.gtop[GTAGS]->flags = 0;
 	if (extractmethod)
-		data.gtop[GTAGS]->flags |= GTAGS_EXTRACTMETHOD;
-	data.gtop[GRTAGS]->flags = data.gtop[GTAGS]->flags;
-	flags = 0;
+		priv_data.put_data.gtop[GTAGS]->flags |= GTAGS_EXTRACTMETHOD;
+	priv_data.put_data.gtop[GRTAGS]->flags = priv_data.put_data.gtop[GTAGS]->flags;
 	if (vflag)
-		flags |= PARSER_VERBOSE;
+		priv_data.conf_data.parser_flags |= PARSER_VERBOSE;
 	if (debug)
-		flags |= PARSER_DEBUG;
+		priv_data.conf_data.parser_flags |= PARSER_DEBUG;
 	if (wflag)
-		flags |= PARSER_WARNING;
+		priv_data.conf_data.parser_flags |= PARSER_WARNING;
 	if (explain)
-		flags |= PARSER_EXPLAIN;
+		priv_data.conf_data.parser_flags |= PARSER_EXPLAIN;
 	if (getenv("GTAGSFORCEENDBLOCK"))
-		flags |= PARSER_END_BLOCK;
+		priv_data.conf_data.parser_flags |= PARSER_END_BLOCK;
 	/*
 	 * Add tags to GTAGS and GRTAGS.
 	 */
@@ -984,20 +940,20 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 	seqno = 0;
 	for (path = start; path < end; path += strlen(path) + 1) {
 		gpath_put(path, GPATH_SOURCE);
-		data.fid = gpath_path2fid(path, NULL);
-		if (data.fid == NULL)
+		priv_data.put_data.fid = gpath_path2fid(path, NULL);
+		if (priv_data.put_data.fid == NULL)
 			die("GPATH is corrupted.('%s' not found)", path);
 		if (vflag)
 			fprintf(stderr, " [%d/%d] extracting tags of %s\n", ++seqno, total, path + 2);
-		parse_file(path, flags, put_syms, &data);
-		gtags_flush(data.gtop[GTAGS], data.fid);
-		if (data.gtop[GRTAGS] != NULL)
-			gtags_flush(data.gtop[GRTAGS], data.fid);
+		parse_file(path, priv_data.conf_data.parser_flags, gtags_put_symbol, &priv_data);
+		gtags_flush(priv_data.put_data.gtop[GTAGS], priv_data.put_data.fid);
+		if (priv_data.put_data.gtop[GRTAGS] != NULL)
+			gtags_flush(priv_data.put_data.gtop[GRTAGS], priv_data.put_data.fid);
 	}
 	parser_exit();
-	gtags_close(data.gtop[GTAGS]);
-	if (data.gtop[GRTAGS] != NULL)
-		gtags_close(data.gtop[GRTAGS]);
+	gtags_close(priv_data.put_data.gtop[GTAGS]);
+	if (priv_data.put_data.gtop[GRTAGS] != NULL)
+		gtags_close(priv_data.put_data.gtop[GRTAGS]);
 }
 /**
  * createtags: create tags file
@@ -1010,9 +966,17 @@ createtags(const char *dbpath, const char *root)
 {
 	STATISTICS_TIME *tim;
 	STRBUF *sb = strbuf_open(0);
-	struct put_func_data data;
-	int openflags, flags, seqno;
-	const char *path;
+	int openflags, seqno = 0;
+
+	reset_gtags_priv_data(priv_data);
+	priv_data.path_seqno = &seqno;
+	priv_data.conf_data.vflag = vflag;
+	priv_data.conf_data.wflag = wflag;
+	priv_data.conf_data.qflag = qflag;
+	priv_data.conf_data.debug = debug;
+	priv_data.conf_data.iflag = iflag;
+	priv_data.conf_data.extractmethod = extractmethod;
+	priv_data.conf_data.explain = explain;
 
 	tim = statistics_time_start("Time of creating %s and %s.", dbname(GTAGS), dbname(GRTAGS));
 	if (vflag)
@@ -1022,56 +986,35 @@ createtags(const char *dbpath, const char *root)
 	if (use_sqlite3)
 		openflags |= GTAGS_SQLITE3;
 #endif
-	data.gtop[GTAGS] = gtags_open(dbpath, root, GTAGS, GTAGS_CREATE, openflags);
-	data.gtop[GTAGS]->flags = 0;
+	priv_data.put_data.gtop[GTAGS] = gtags_open(dbpath, root, GTAGS, GTAGS_CREATE, openflags);
+	priv_data.put_data.gtop[GTAGS]->flags = 0;
 	if (extractmethod)
-		data.gtop[GTAGS]->flags |= GTAGS_EXTRACTMETHOD;
-	data.gtop[GRTAGS] = gtags_open(dbpath, root, GRTAGS, GTAGS_CREATE, openflags);
-	data.gtop[GRTAGS]->flags = data.gtop[GTAGS]->flags;
-	flags = 0;
+		priv_data.put_data.gtop[GTAGS]->flags |= GTAGS_EXTRACTMETHOD;
+	priv_data.put_data.gtop[GRTAGS] = gtags_open(dbpath, root, GRTAGS, GTAGS_CREATE, openflags);
+	priv_data.put_data.gtop[GRTAGS]->flags = priv_data.put_data.gtop[GTAGS]->flags;
+	priv_data.conf_data.parser_flags = 0;
 	if (vflag)
-		flags |= PARSER_VERBOSE;
+		priv_data.conf_data.parser_flags |= PARSER_VERBOSE;
 	if (debug)
-		flags |= PARSER_DEBUG;
+		priv_data.conf_data.parser_flags |= PARSER_DEBUG;
 	if (wflag)
-		flags |= PARSER_WARNING;
+		priv_data.conf_data.parser_flags |= PARSER_WARNING;
 	if (explain)
-		flags |= PARSER_EXPLAIN;
+		priv_data.conf_data.parser_flags |= PARSER_EXPLAIN;
 	if (getenv("GTAGSFORCEENDBLOCK"))
-		flags |= PARSER_END_BLOCK;
+		priv_data.conf_data.parser_flags |= PARSER_END_BLOCK;
 	/*
 	 * Add tags to GTAGS and GRTAGS.
 	 */
 	if (file_list)
 		find_open_filelist(file_list, root, explain);
 	else
-		find_open(NULL, explain);
-	seqno = 0;
-	while ((path = find_read()) != NULL) {
-		if (*path == ' ') {
-			path++;
-			if (!test("b", path))
-				gpath_put(path, GPATH_OTHER);
-			continue;
-		}
-		gpath_put(path, GPATH_SOURCE);
-		data.fid = gpath_path2fid(path, NULL);
-		if (data.fid == NULL)
-			die("GPATH is corrupted.('%s' not found)", path);
-		seqno++;
-		if (vflag)
-			fprintf(stderr, " [%d] extracting tags of %s\n", seqno, path + 2);
-		parse_file(path, flags, put_syms, &data);
-		gtags_flush(data.gtop[GTAGS], data.fid);
-		gtags_flush(data.gtop[GRTAGS], data.fid);
-	}
+		build_path_tree(NULL);
+	/* start parsing source files */
+	path_tree_traverse(&priv_data);
 	total = seqno;
-	parser_exit();
-	find_close();
-	statistics_time_end(tim);
-	tim = statistics_time_start("Time of flushing B-tree cache");
-	gtags_close(data.gtop[GTAGS]);
-	gtags_close(data.gtop[GRTAGS]);
+	gtags_close(priv_data.put_data.gtop[GTAGS]);
+	gtags_close(priv_data.put_data.gtop[GRTAGS]);
 	statistics_time_end(tim);
 	strbuf_reset(sb);
 	if (getconfs("GTAGS_extra", sb)) {
