@@ -61,7 +61,6 @@
 #include "varray.h"
 
 #define HASHBUCKETS	2048
-#define HASH_ENTRY_MAX	50000
 
 static int compare_path(const void *, const void *);
 static int compare_lineno(const void *, const void *);
@@ -468,7 +467,7 @@ gtags_open(const char *dbpath, const char *root, int db, int mode, int flags)
 	/*
 	 * Stuff for compact format.
 	 */
-	if (gtop->format & GTAGS_COMPACT || gtop->db == GTAGS) {
+	if (gtop->format & GTAGS_COMPACT) {
 		assert(root != NULL);
 		strlimcpy(gtop->root, root, sizeof(gtop->root));
 		if (gtop->mode != GTAGS_READ)
@@ -491,7 +490,9 @@ gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const cha
 {
 	const char *key;
 
-	if (gtop->format & GTAGS_COMPACT || (gtop->db == GTAGS && gtop->path_hash->entries < HASH_ENTRY_MAX)) {
+	if (gtop->format & GTAGS_COMPACT) {
+		struct sh_entry *entry;
+
 		/*
 		 * Register each record into the pool.
 		 *
@@ -503,13 +504,11 @@ gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const cha
 		 * "funcB"   |34| 2| 5|66| 3|...
 		 * ...
 		 */
-		struct sh_entry *entry = strhash_assign(gtop->path_hash, tag, 1);
-		if (gtop->format & GTAGS_COMPACT) {
-			if (entry->value == NULL)
-				entry->value = varray_open(sizeof(int), 100);
-			*(int *)varray_append((VARRAY *)entry->value) = lno;
-			return;
-		}
+		entry = strhash_assign(gtop->path_hash, tag, 1);
+		if (entry->value == NULL)
+			entry->value = varray_open(sizeof(int), 100);
+		*(int *)varray_append((VARRAY *)entry->value) = lno;
+		return;
 	}
 	/*
 	 * extract method when class method definition.
@@ -1195,13 +1194,4 @@ segment_read(GTOP *gtop)
 	if (!(gtop->flags & GTOP_NOSORT))
 		qsort(gtop->gtp_array, gtop->gtp_count, sizeof(GTP),
 			gtop->flags & GTOP_NEARSORT ? compare_neartags : compare_tags);
-}
-
-int
-gtags_exists(GTOP *gtop, const char *tag)
-{
-	if (gtop->db == GTAGS)
-		if (strhash_assign(gtop->path_hash, tag, 0) || gtop->path_hash->entries >= HASH_ENTRY_MAX)
-			return 1;
-	return 0;
 }
