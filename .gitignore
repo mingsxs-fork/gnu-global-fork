@@ -51,14 +51,9 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
-**/.deps
-**/Makefile
 Doxyfile
 stamp-h1
 **/.dirstamp
-config.h
-config.status
-config.log
 
 # compiled binaries
 libtool
@@ -72,3 +67,10 @@ htags/global.cgi
 htags/htags
 **/.libs
 **/*.dis
+
+# can be generated from GNU autotools
+**/.deps
+**/Makefile
+**/Makefile.in
+config.*
+config-*
