@@ -1,4 +1,4 @@
-#line 1 "php.c"
+#line 2 "php.c"
 /*
  * Copyright (c) 2002, 2004, 2005, 2006, 2008 Tama Communications Corporation
  *
@@ -54,7 +54,7 @@
 static int pre_here_document;
 static char end_of_here_document[IDENTLEN];
 
-#line 57 "php.c"
+#line 58 "php.c"
 
 #define  YY_INT_ALIGNED short int
 
@@ -891,7 +891,7 @@ char *yytext;
 #line 59 "php.l"
  /* Definitions */
 
-#line 894 "php.c"
+#line 895 "php.c"
 
 #define INITIAL 0
 #define PHP 1
@@ -1130,7 +1130,7 @@ YY_DECL
 #line 72 "php.l"
 
  /* Start PHP */
-#line 1133 "php.c"
+#line 1134 "php.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1476,7 +1476,7 @@ YY_RULE_SETUP
 #line 248 "php.l"
 ECHO;
 	YY_BREAK
-#line 1479 "php.c"
+#line 1480 "php.c"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(PHP):
 case YY_STATE_EOF(C_COMMENT):

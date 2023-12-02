@@ -54,7 +54,7 @@
 #include "test.h"
 #include "locatestring.h"
 #include "strbuf.h"
-#include "strhash.h"
+#include "dbop.h"
 #include "gpathop.h"
 #include "path_tree.h"
 #include "gtags_helper.h"
@@ -73,7 +73,7 @@
 #define ROOT 0
 #endif
 
-#if defined(_WIN32) && !defined(__CYGWIN__) || defined(__DJGPP__)
+#if (defined(_WIN32) && !defined(__CYGWIN__)) || defined(__DJGPP__)
 #define SEP '\\'
 #else
 #define SEP '/'
@@ -83,11 +83,11 @@
 
 /* internal variables */
 static int total_accepted_paths = 0;
-static int *file_parse_states = NULL;
+static char *file_parse_states = NULL;
 static char *rootrealpath;
 static const int allow_blank = 1;
 static PATH_NODE *rootpath = NULL;
-static STRHASH *search_bucket = NULL;
+static DBOP *search_bucket = NULL;
 
 #if 0
 /* external variables */
@@ -211,17 +211,18 @@ void
 update_search_bucket(PATH_NODE *path)
 {
 	PATH_LIST *node, *head;
-	struct sh_entry *entry;
+	size_t len;
 	if (!path || !search_bucket)
 		return ;
+	len = strlen(path->name) + 1;
 	node = check_malloc(sizeof(PATH_LIST));
 	node->path = path;
 	node->next = NULL;
-	entry = strhash_assign(search_bucket, path->name, 1);
-	if (entry->value) {
-		node->next = entry->value;
+	head = (PATH_LIST *)dbop_get_generic(search_bucket, path->name, len);
+	if (head) {
+		node->next = head;
 	}
-	entry->value = node;
+	dbop_put_generic(search_bucket, path->name, len, node, sizeof(*node), 0);
 }
 
 int
@@ -276,7 +277,7 @@ build_path_tree(const char *start)
 		rootpath->childpaths = NULL;
 	}
 	if (!search_bucket) {
-		search_bucket = strhash_open(HASHBUCKETS);
+		search_bucket = dbop_open(NULL, 1, 0644, 0);
 		if (!search_bucket)
 			die("can't create name search hash bucket.");
 	}
@@ -288,7 +289,7 @@ build_path_tree(const char *start)
 	}
 	/* allocate memory for parse states */
 	if (!file_parse_states)
-		file_parse_states = check_calloc(total_accepted_paths, sizeof(int));
+		file_parse_states = check_calloc(total_accepted_paths, sizeof(char));
 	strbuf_close(sb);
 }
 
@@ -297,14 +298,11 @@ walk_destroy_path_tree(PATH_NODE *path_node)
 {
 	PATH_NODE *childpath;
 	PATH_LIST *freenode = NULL, *tmpnode;
-	struct sh_entry *entry;
 	if (!path_node) /* reach leaf node */
 		return;
 	/* free file name search map in bucket */
 	if (!path_node->childpaths && search_bucket) {
-		entry = strhash_assign(search_bucket, path_node->name, 0);
-		if (entry)
-			freenode = (PATH_LIST *)entry->value;
+		freenode = dbop_get_generic(search_bucket, path_node->name, strlen(path_node->name)+1);
 		while (freenode) {
 			tmpnode = freenode->next;
 			free(freenode);
@@ -338,7 +336,7 @@ destroy_path_tree(void)
 		file_parse_states = NULL;
 	}
 	if (search_bucket) {
-		strhash_close(search_bucket);
+		dbop_close(search_bucket);
 		search_bucket = NULL;
 	}
 	/* reset total accepted paths */
@@ -392,17 +390,15 @@ construct_path_from_leaf(PATH_NODE *leaf)
 void
 path_tree_search_name(const char *name, void *data)
 {
-	PATH_LIST *walknode;
-	struct sh_entry *entry = strhash_assign(search_bucket, name, 0);
+	PATH_LIST *walknode = dbop_get_generic(search_bucket, (void *)name, strlen(name)+1);
 	const char *path;
 	struct gtags_priv_data *priv_data = data;
 	if (priv_data->conf_data.vflag)
 		fprintf(stderr, "using path tree search name method\n");
-	if (!entry)
-		return;  /* file not found */
-	for (walknode = (PATH_LIST *)entry->value; walknode; walknode = walknode->next) {
+	while (walknode) {
 		path = construct_path_from_leaf(walknode->path);
 		gtags_handle_path(path, data);
+		walknode = walknode->next;
 	}
 }
 
@@ -416,7 +412,7 @@ set_file_parse_state(const char *fpath, file_parse_state_e state)
 	else if (n_fid == 0)
 		warning("cannot find file path in db: %s\n", fpath);
 	else
-		file_parse_states[n_fid - 1] = state;
+		file_parse_states[n_fid - 1] = (char)state;
 }
 
 int
@@ -429,7 +425,7 @@ get_file_parse_state(const char *fpath)
 	else if (n_fid == 0)  /* file path not found, parse not started yet */
 		return FILE_PARSE_NEW;
 	else
-		return file_parse_states[n_fid - 1];
+		return (int)file_parse_states[n_fid - 1];
 }
 
 const char *

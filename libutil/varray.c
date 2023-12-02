@@ -27,6 +27,7 @@
 #include "checkalloc.h"
 #include "die.h"
 #include "varray.h"
+#include "likely.h"
 
 /*
 
@@ -114,12 +115,12 @@ varray_open(int size, int expand)
 void *
 varray_assign(VARRAY *vb, int index, int force)
 {
-	if (index < 0)
+	if (unlikely(index < 0))
 		die("varray_assign: invalid index value.");
-	if (index >= vb->length) {
-		if (force)
+	if (unlikely(index >= vb->length)) {
+		if (likely(force))
 			vb->length = index + 1;
-		else if (index == 0 && vb->length == 0)
+		else if (unlikely(index == 0 && vb->length == 0))
 			return NULL;
 		else
 			die("varray_assign: index(=%d) is out of range.", index);
@@ -127,7 +128,7 @@ varray_assign(VARRAY *vb, int index, int force)
 	/*
  	 * Expand the area.
 	 */
-	if (index >= vb->alloced) {
+	if (unlikely(index >= vb->alloced)) {
 		int old_alloced = vb->alloced;
 
 		while (index >= vb->alloced)
@@ -137,7 +138,7 @@ varray_assign(VARRAY *vb, int index, int force)
 		 * when a null pointer is passed.
 		 * Therefore, we cannot use realloc(NULL, ...).
 		 */
-		if (vb->vbuf == NULL)
+		if (unlikely(vb->vbuf == NULL))
 			vb->vbuf = (char *)check_malloc(vb->size * vb->alloced);
 		else
 			vb->vbuf = (char *)check_realloc(vb->vbuf, vb->size * vb->alloced);

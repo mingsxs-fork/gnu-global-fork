@@ -100,6 +100,7 @@ typedef struct {
 typedef struct {
 	DBOP *dbop;			/**< descripter of DBOP */
 	DBOP *gtags;			/**< descripter of GTAGS */
+	DBOP *gtag_names;	/** gtags symbols */
 	int format_version;		/**< format version */
 	int format;			/**< GTAGS_COMPACT, GTAGS_COMPRESS */
 	int mode;			/**< mode */

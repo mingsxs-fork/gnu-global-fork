@@ -1,4 +1,4 @@
-#line 1 "cpp.c"
+#line 2 "cpp.c"
 /*
  * Copyright (c) 2002, 2004 Tama Communications Corporation
  *
@@ -47,7 +47,7 @@
 
 static int last_directive;
 
-#line 50 "cpp.c"
+#line 51 "cpp.c"
 
 #define  YY_INT_ALIGNED short int
 
@@ -815,7 +815,7 @@ char *yytext;
 #line 51 "cpp.l"
  /* Definitions */
 
-#line 818 "cpp.c"
+#line 819 "cpp.c"
 
 #define INITIAL 0
 #define CPP 1
@@ -1053,7 +1053,7 @@ YY_DECL
 #line 64 "cpp.l"
 
  /* Backslash-newline */
-#line 1056 "cpp.c"
+#line 1057 "cpp.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1301,7 +1301,7 @@ YY_RULE_SETUP
 #line 180 "cpp.l"
 ECHO;
 	YY_BREAK
-#line 1304 "cpp.c"
+#line 1305 "cpp.c"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(CPP):
 case YY_STATE_EOF(CPP_COMMENT):

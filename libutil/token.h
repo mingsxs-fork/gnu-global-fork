@@ -55,5 +55,8 @@ void pushbacktoken(void);
 int peekc(int);
 void throwaway_nextchar(void);
 int atfirst_exceptspace(void);
+int expect_chars(const char *, STRBUF *);
+
+#define	expect_chars_flush(interested)	expect_chars(interested, NULL)
 
 #endif /* ! _TOKEN_H_ */

@@ -1,4 +1,4 @@
-#line 1 "java.c"
+#line 2 "java.c"
 /*
  * Copyright (c) 2002, 2004 Tama Communications Corporation
  *
@@ -44,7 +44,7 @@
 
 #define YY_USER_ACTION DEFAULT_YY_USER_ACTION
 
-#line 47 "java.c"
+#line 48 "java.c"
 
 #define  YY_INT_ALIGNED short int
 
@@ -791,7 +791,7 @@ char *yytext;
 #line 49 "java.l"
  /* Definitions */
 
-#line 794 "java.c"
+#line 795 "java.c"
 
 #define INITIAL 0
 #define JAVA 1
@@ -1029,7 +1029,7 @@ YY_DECL
 #line 62 "java.l"
 
  /* Comment */
-#line 1032 "java.c"
+#line 1033 "java.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1201,7 +1201,7 @@ YY_RULE_SETUP
 #line 114 "java.l"
 ECHO;
 	YY_BREAK
-#line 1204 "java.c"
+#line 1205 "java.c"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(JAVA):
 case YY_STATE_EOF(C_COMMENT):

@@ -74,3 +74,5 @@ htags/htags
 **/Makefile.in
 config.*
 config-*
+autom4te.cache/*
+**/*~

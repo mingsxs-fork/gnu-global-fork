@@ -97,7 +97,7 @@ const char *dump_target;
 char *single_update;
 int statistics = STATISTICS_STYLE_NONE;
 int explain;
-static struct gtags_priv_data priv_data;
+struct gtags_priv_data priv_data;
 #ifdef USE_SQLITE3
 int use_sqlite3;
 #endif

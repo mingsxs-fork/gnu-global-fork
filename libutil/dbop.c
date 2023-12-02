@@ -255,7 +255,10 @@ dbop_open(const char *path, int mode, int perm, int flags)
 	memset(&info, 0, sizeof(info));
 	if (flags & DBOP_DUP)
 		info.flags |= R_DUP;
-	info.psize = DBOP_PAGESIZE;
+#ifdef HAVE_UNISTD_H
+	info.psize = sysconf(_SC_PAGESIZE);
+#endif
+	info.psize = MAX(info.psize, DBOP_PAGESIZE);
 	/*
 	 * Decide cache size. The default value is 5MB.
 	 * See libutil/gparam.h for the details.
@@ -312,14 +315,15 @@ finish:
 	return dbop;
 }
 /**
- * dbop_get: get data by a key.
+ * dbop_get_generic: get data by a key.
  *
  *	@param[in]	dbop	descripter
  *	@param[in]	name	name
+ *	@param[in]	size	strlen(name) + 1
  *	@return		pointer to data or NULL
  */
-const char *
-dbop_get(DBOP *dbop, const char *name)
+void *
+dbop_get_generic(DBOP *dbop, void *name, size_t size)
 {
 	DB *db = dbop->db;
 	DBT key, dat;
@@ -327,10 +331,10 @@ dbop_get(DBOP *dbop, const char *name)
 
 #ifdef USE_SQLITE3
 	if (dbop->openflags & DBOP_SQLITE3)
-		return dbop3_get(dbop, name);
+		return (void *)dbop3_get(dbop, name);
 #endif
-	key.data = (char *)name;
-	key.size = strlen(name)+1;
+	key.data = (void *)name;
+	key.size = size;
 
 	status = (*db->get)(db, &key, &dat, 0);
 	dbop->lastdat = (char *)dat.data;
@@ -346,19 +350,22 @@ dbop_get(DBOP *dbop, const char *name)
 	return (dat.data);
 }
 /**
- * dbop_put: put data by a key.
+ * dbop_put_generic: put data by a key with flags.
  *
  *	@param[in]	dbop	descripter
  *	@param[in]	name	key
+ *	@param[in]	nsize	key size
  *	@param[in]	data	data
+ *	@param[in]	dsize	data size
+ *	@param[in]	flag	database put flag
  */
 void
-dbop_put(DBOP *dbop, const char *name, const char *data)
+dbop_put_generic(DBOP *dbop, void *name, size_t nsize, void *data, size_t dsize, int flags)
 {
 	DB *db = dbop->db;
 	DBT key, dat;
 	int status;
-	int len;
+	int klen = nsize - 1;
 
 #ifdef USE_SQLITE3
 	if (dbop->openflags & DBOP_SQLITE3) {
@@ -366,9 +373,9 @@ dbop_put(DBOP *dbop, const char *name, const char *data)
 		return;
 	}
 #endif
-	if (!(len = strlen(name)))
+	if (!klen)
 		die("primary key size == 0.");
-	if (len > MAXKEYLEN)
+	if (klen > MAXKEYLEN)
 		die("primary key too long.");
 	/* sorted writing */
 	if (dbop->sortout != NULL) {
@@ -379,16 +386,23 @@ dbop_put(DBOP *dbop, const char *name, const char *data)
 		return;
 	}
 	key.data = (char *)name;
-	key.size = len+1;
-	dat.data = (char *)data;
-	dat.size = strlen(data)+1;
+	key.size = nsize;
+	if (data) {
+		dat.data = (char *)data;
+		dat.size = dsize;
+	} else {
+		dat.data = NULL;
+		dat.size = 0;
+	}
 
-	status = (*db->put)(db, &key, &dat, 0);
+	status = (*db->put)(db, &key, &dat, flags);
 	switch (status) {
 	case RET_SUCCESS:
 		break;
 	case RET_ERROR:
 	case RET_SPECIAL:
+		if (flags == R_NOOVERWRITE)
+			break;
 		die("%s", dbop->put_errmsg ? dbop->put_errmsg : "dbop_put failed.");
 	}
 }
@@ -846,6 +860,32 @@ dbop_close(DBOP *dbop)
 	}
 	(void)free(dbop);
 }
+
+int dbop_exists_key(DBOP *dbop, const char *name)
+{
+	DB *db = dbop->db;
+	DBT key;
+	int status;
+
+#ifdef USE_SQLITE3
+	if (dbop->openflags & DBOP_SQLITE3)
+		return (dbop3_get(dbop, name) != NULL);
+#endif
+	key.data = (char *)name;
+	key.size = strlen(name)+1;
+
+	status = (*db->get)(db, &key, NULL, 0);
+	switch (status) {
+	case RET_SUCCESS:
+		return 1;
+	case RET_ERROR:
+		die("dbop_get failed.");
+	case RET_SPECIAL:
+		break;
+	}
+	return 0;
+}
+
 #ifdef USE_SQLITE3
 DBOP *
 dbop3_open(const char *path, int mode, int perm, int flags) {

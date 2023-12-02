@@ -1,4 +1,4 @@
-#line 1 "c.c"
+#line 2 "c.c"
 /*
  * Copyright (c) 2002, 2004 Tama Communications Corporation
  *
@@ -48,7 +48,7 @@
 static int last_directive;
 static int brace_level;
 
-#line 51 "c.c"
+#line 52 "c.c"
 
 #define  YY_INT_ALIGNED short int
 
@@ -847,7 +847,7 @@ char *yytext;
  /* Definitions */
 
 
-#line 850 "c.c"
+#line 851 "c.c"
 
 #define INITIAL 0
 #define C 1
@@ -1089,7 +1089,7 @@ YY_DECL
 #line 68 "c.l"
 
  /* Backslash-newline */
-#line 1092 "c.c"
+#line 1093 "c.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1436,7 +1436,7 @@ YY_RULE_SETUP
 #line 240 "c.l"
 ECHO;
 	YY_BREAK
-#line 1439 "c.c"
+#line 1440 "c.c"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(C):
 case YY_STATE_EOF(CPP_COMMENT):

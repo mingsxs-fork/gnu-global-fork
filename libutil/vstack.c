@@ -28,6 +28,7 @@
 #include "checkalloc.h"
 #include "die.h"
 #include "vstack.h"
+#include "likely.h"
 
 /*
 
@@ -85,7 +86,7 @@ vstack_push(VSTACK *vs)
 void *
 vstack_pop(VSTACK *vs)
 {
-	if (--vs->stack_top < 0) {
+	if (unlikely(--vs->stack_top < 0)) {
 		vs->stack_top = -1;
 		return NULL;
 	}
@@ -100,7 +101,7 @@ vstack_pop(VSTACK *vs)
 void *
 vstack_top(VSTACK *vs)
 {
-	if (vs->stack_top < 0)
+	if (unlikely(vs->stack_top < 0))
 		return NULL;
 	return varray_assign(vs->varray, vs->stack_top, 0);
 }

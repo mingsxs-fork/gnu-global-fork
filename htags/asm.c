@@ -1,4 +1,4 @@
-#line 1 "asm.c"
+#line 2 "asm.c"
 /*
  * Copyright (c) 2002, 2004 Tama Communications Corporation
  *
@@ -47,7 +47,7 @@
 
 static int last_directive;
 
-#line 50 "asm.c"
+#line 51 "asm.c"
 
 #define  YY_INT_ALIGNED short int
 
@@ -815,7 +815,7 @@ char *yytext;
 #line 51 "asm.l"
  /* Definitions */
 
-#line 818 "asm.c"
+#line 819 "asm.c"
 
 #define INITIAL 0
 #define ASM 1
@@ -1053,7 +1053,7 @@ YY_DECL
 #line 64 "asm.l"
 
  /* Backslash-newline */
-#line 1056 "asm.c"
+#line 1057 "asm.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1303,7 +1303,7 @@ YY_RULE_SETUP
 #line 182 "asm.l"
 ECHO;
 	YY_BREAK
-#line 1306 "asm.c"
+#line 1307 "asm.c"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(ASM):
 case YY_STATE_EOF(CPP_COMMENT):

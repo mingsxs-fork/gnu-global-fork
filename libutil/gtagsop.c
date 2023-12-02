@@ -428,6 +428,11 @@ gtags_open(const char *dbpath, const char *root, int db, int mode, int flags)
 		if (gtop->format & GTAGS_COMPNAME)
 			dbop_putoption(gtop->dbop, COMPNAMEKEY, NULL);
 		dbop_putversion(gtop->dbop, gtop->format_version); 
+		if (gtop->db == GTAGS) {
+			gtop->gtag_names = dbop_open(NULL, dbmode, 0644, 0);
+			if (!gtop->gtag_names)
+				die("cannot create gtags name db when GTAGS_CREATE.");
+		}
 	} else {
 		/*
 		 * recognize format version of GTAGS. 'format version record'
@@ -509,6 +514,9 @@ gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const cha
 			entry->value = varray_open(sizeof(int), 100);
 		*(int *)varray_append((VARRAY *)entry->value) = lno;
 		return;
+	}
+	if (gtop->mode == GTAGS_CREATE && gtop->db == GTAGS) {
+		dbop_put_key_only(gtop->gtag_names, tag);
 	}
 	/*
 	 * extract method when class method definition.
@@ -985,10 +993,12 @@ gtags_close(GTOP *gtop)
 		varray_close(gtop->vb);
 	if (gtop->path_hash)
 		strhash_close(gtop->path_hash);
-	gpath_close();
-	dbop_close(gtop->dbop);
+	if (gtop->gtag_names)
+		dbop_close(gtop->gtag_names);
 	if (gtop->gtags)
 		dbop_close(gtop->gtags);
+	gpath_close();
+	dbop_close(gtop->dbop);
 	free(gtop);
 }
 /**

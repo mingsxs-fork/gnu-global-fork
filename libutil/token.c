@@ -386,3 +386,17 @@ pushbackchar(void)
         else
                 --cp;
 }
+
+int
+expect_chars(const char *interested, STRBUF *out)
+{
+	int c;
+	if (out)
+		strbuf_clear(out);
+	if (!interested)
+		die("impossile");
+	while ((c = nextchar()) != EOF &&  c != '\n' && strchr(interested, c) == NULL)
+		if (out)
+			strbuf_putc(out, (char)c);
+	return lasttok = c;
+}
