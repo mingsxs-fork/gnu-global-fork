@@ -64,7 +64,7 @@
 	char *nl = strchr(line_image, '\n');				\
 	if (nl != NULL)							\
 		*nl = '\0';						\
-	param->put(type, tag, lno, param->file, line_image, param->arg);\
+	param->put(type, tag, lno, param->gpath->path, line_image, param->arg);\
 	if (nl != NULL)							\
 		*nl = '\n';						\
 } while (0)
@@ -1314,7 +1314,7 @@ case YY_STATE_EOF(C_COMMENT):
 #line 105 "asm_scan.l"
 {
 		if (param->flags & PARSER_WARNING)
-			warning("unexpected eof. [+%d %s]", LEXLINENO, param->file);
+			warning("unexpected eof. [+%d %s]", LEXLINENO, param->gpath->path);
 		yyterminate();
 	}
 	YY_BREAK

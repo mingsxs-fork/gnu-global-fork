@@ -22,6 +22,7 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
+#include <stdio.h>
 #ifdef HAVE_STRING_H
 #include <string.h>
 #else
@@ -30,13 +31,14 @@
 
 #include "internal.h"
 #include "die.h"
+#include "c_res.h"
 #include "strbuf.h"
 #include "strlimcpy.h"
 #include "tokenizer.h"
-#include "c_res.h"
-#include "gtags_helper.h"
+#include "path.h"
 #include "path_tree.h"
 #include "gtagsop.h"
+#include "gtags_helper.h"
 
 static void C_family(const struct parser_param *, int);
 static void process_attribute(const struct parser_param *);
@@ -79,7 +81,13 @@ TOKENIZER *tokenizer;  /* THIS tokenizer under parsing */
 void
 yacc(const struct parser_param *param)
 {
+	struct gtags_priv_data *priv_data = param->arg;
+	if (priv_data->gconf.vflag)
+		fprintf(stderr, " [%d] START extracting YACC tags of %s\n", priv_data->gpath->seq, trimpath(priv_data->gpath->path));
 	C_family(param, TYPE_YACC);
+	if (priv_data->gconf.vflag)
+		fprintf(stderr, " [%d] END extracting YACC tags of %s\n", priv_data->gpath->seq, trimpath(priv_data->gpath->path));
+
 }
 /**
  * C: read C file and pickup tag entries.
@@ -87,7 +95,12 @@ yacc(const struct parser_param *param)
 void
 C(const struct parser_param *param)
 {
+	struct gtags_priv_data *priv_data = param->arg;
+	if (priv_data->gconf.vflag)
+		fprintf(stderr, " [%d] START extracting C tags of %s\n", priv_data->gpath->seq, trimpath(priv_data->gpath->path));
 	C_family(param, TYPE_C);
+	if (priv_data->gconf.vflag)
+		fprintf(stderr, " [%d] END extracting C tags of %s\n", priv_data->gpath->seq, trimpath(priv_data->gpath->path));
 }
 /**
  *	@param[in]	param	source file
@@ -119,8 +132,8 @@ C_family(const struct parser_param *param, int type)
 	savelevel = -1;
 	startmacro = startsharp = 0;
 
-	if (!tokenizer_open(param->file, NULL, &local))
-		die("'%s' cannot open.", param->file);
+	if (!tokenizer_open(param->gpath, NULL, &local))
+		die("'%s' cannot open.", param->gpath->path);
 	tokenizer = current_tokenizer();  /* get current tokenizer for this file */
 	tokenizer->mode |= C_MODE;  /* allow token like '#xxx' */
 	tokenizer->crflag = 1;  /* require '\n' as a token */
@@ -177,7 +190,7 @@ C_family(const struct parser_param *param, int type)
 			local.level++;
 			if ((param->flags & PARSER_BEGIN_BLOCK) && cp_at_first(tokenizer)) {
 				if ((param->flags & PARSER_WARNING) && local.level != 1)
-					warning("forced level 1 block start by '{' at column 0 [+%d %s].", tokenizer->lineno, tokenizer->path); /* } */
+					warning("forced level 1 block start by '{' at column 0 [+%d %s].", tokenizer->lineno, tokenizer->gpath->path); /* } */
 				local.level = 1;
 			}
 			break;
@@ -188,12 +201,12 @@ C_family(const struct parser_param *param, int type)
 				if (local.externclevel > 0)
 					local.externclevel--;
 				else if (param->flags & PARSER_WARNING)
-					warning("missing left '{' [+%d %s].", tokenizer->lineno, tokenizer->path); /* } */
+					warning("missing left '{' [+%d %s].", tokenizer->lineno, tokenizer->gpath->path); /* } */
 				local.level = 0;
 			}
 			if ((param->flags & PARSER_END_BLOCK) && cp_at_first(tokenizer)) {
 				if ((param->flags & PARSER_WARNING) && local.level != 0) /* { */
-					warning("forced level 0 block end by '}' at column 0 [+%d %s].", tokenizer->lineno, tokenizer->path);
+					warning("forced level 0 block end by '}' at column 0 [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
 				local.level = 0;
 			}
 			if (yaccstatus == RULES && local.level == 0)
@@ -204,7 +217,7 @@ C_family(const struct parser_param *param, int type)
 		case '\n':
 			if (startmacro && local.level != savelevel) {
 				if (param->flags & PARSER_WARNING)
-					warning("different level before and after #define macro. reseted. [+%d %s].", tokenizer->lineno, tokenizer->path);
+					warning("different level before and after #define macro. reseted. [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
 				local.level = savelevel;
 			}
 			startmacro = startsharp = 0;
@@ -212,7 +225,7 @@ C_family(const struct parser_param *param, int type)
 		case YACC_SEP:		/* %% */
 			if (local.level != 0) {
 				if (param->flags & PARSER_WARNING)
-					warning("forced level 0 block end by '%%' [+%d %s].", tokenizer->lineno, tokenizer->path);
+					warning("forced level 0 block end by '%%' [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
 				local.level = 0;
 			}
 			if (yaccstatus == DECLARATIONS) {
@@ -225,21 +238,21 @@ C_family(const struct parser_param *param, int type)
 		case YACC_BEGIN:	/* %{ */
 			if (local.level != 0) {
 				if (param->flags & PARSER_WARNING)
-					warning("forced level 0 block end by '%%{' [+%d %s].", tokenizer->lineno, tokenizer->path);
+					warning("forced level 0 block end by '%%{' [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
 				local.level = 0;
 			}
 			if (inC == 1 && (param->flags & PARSER_WARNING))
-				warning("'%%{' appeared in C mode. [+%d %s].", tokenizer->lineno, tokenizer->path);
+				warning("'%%{' appeared in C mode. [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
 			inC = 1;
 			break;
 		case YACC_END:		/* %} */
 			if (local.level != 0) {
 				if (param->flags & PARSER_WARNING)
-					warning("forced level 0 block end by '%%}' [+%d %s].", tokenizer->lineno, tokenizer->path);
+					warning("forced level 0 block end by '%%}' [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
 				local.level = 0;
 			}
 			if (inC == 0 && (param->flags & PARSER_WARNING))
-				warning("'%%}' appeared in Yacc mode. [+%d %s].", tokenizer->lineno, tokenizer->path);
+				warning("'%%}' appeared in Yacc mode. [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
 			inC = 0;
 			break;
 		case YACC_UNION:	/* %union {...} */
@@ -349,7 +362,7 @@ C_family(const struct parser_param *param, int type)
 		case C_SWITCH:
 		case C_WHILE:
 			if ((param->flags & PARSER_WARNING) && !startmacro && local.level == 0)
-				warning("Out of function. %8s [+%d %s]", tokenizer->token, tokenizer->lineno, tokenizer->path);
+				warning("Out of function. %8s [+%d %s]", tokenizer->token, tokenizer->lineno, tokenizer->gpath->path);
 			break;
 		case C_TYPEDEF:
 			{
@@ -369,7 +382,7 @@ C_family(const struct parser_param *param, int type)
 				} while (IS_TYPE_QUALIFIER(c) || c == '\n');
 
 				if ((param->flags & PARSER_WARNING) && c == EOF) {
-					warning("unexpected eof. [+%d %s]", tokenizer->lineno, tokenizer->path);
+					warning("unexpected eof. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
 					break;
 				} else if (c == C_ENUM || c == C_STRUCT || c == C_UNION) {
 					char *interest_enum = "{},;";
@@ -433,7 +446,7 @@ C_family(const struct parser_param *param, int type)
 							break;
 					}
 					if ((param->flags & PARSER_WARNING) && c == EOF) {
-						warning("unexpected eof. [+%d %s]", tokenizer->lineno, tokenizer->path);
+						warning("unexpected eof. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
 						break;
 					}
 				} else if (c == SYMBOL) {
@@ -480,9 +493,9 @@ C_family(const struct parser_param *param, int type)
 				}
 				if (param->flags & PARSER_WARNING) {
 					if (c == EOF)
-						warning("unexpected eof. [+%d %s]", tokenizer->lineno, tokenizer->path);
+						warning("unexpected eof. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
 					else if (local.level != typedef_savelevel)
-						warning("unmatched () block. (last at level %d.)[+%d %s]", local.level, tokenizer->lineno, tokenizer->path);
+						warning("unmatched () block. (last at level %d.)[+%d %s]", local.level, tokenizer->lineno, tokenizer->gpath->path);
 				}
 			}
 			break;
@@ -496,9 +509,9 @@ C_family(const struct parser_param *param, int type)
 	strbuf_close(sb);
 	if (param->flags & PARSER_WARNING) {
 		if (local.level != 0)
-			warning("unmatched {} block. (last at level %d.)[+%d %s]", local.level, tokenizer->lineno, tokenizer->path);
+			warning("unmatched {} block. (last at level %d.)[+%d %s]", local.level, tokenizer->lineno, tokenizer->gpath->path);
 		if (local.piflevel != 0)
-			warning("unmatched #if block. (last at level %d.)[+%d %s]", local.piflevel, tokenizer->lineno, tokenizer->path);
+			warning("unmatched #if block. (last at level %d.)[+%d %s]", local.piflevel, tokenizer->lineno, tokenizer->gpath->path);
 	}
 	/* close current tokenizer */
 	tokenizer_close(tokenizer);
@@ -634,7 +647,7 @@ condition_macro(const struct parser_param *param, int cc)
 		DBG_PRINT(plocal->piflevel, "#if");
 		plocal->piflevel++;
 		if (plocal->piflevel >= MAXPIFSTACK)
-			die("#if stack over flow. [%s]", tokenizer->path);
+			die("#if stack over flow. [%s]", tokenizer->gpath->path);
 		plocal->curstack++;
 		plocal->curstack->start = plocal->level;
 		plocal->curstack->end = -1;
@@ -650,7 +663,7 @@ condition_macro(const struct parser_param *param, int cc)
 		if (plocal->curstack->end == -1)
 			plocal->curstack->end = plocal->level;
 		else if (plocal->curstack->end != plocal->level && (param->flags & PARSER_WARNING))
-			warning("uneven level. [+%d %s]", tokenizer->lineno, tokenizer->path);
+			warning("uneven level. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
 		plocal->level = plocal->curstack->start;
 		plocal->curstack->if0only = 0;
 	} else if (cc == SHARP_ENDIF) {
@@ -663,13 +676,13 @@ condition_macro(const struct parser_param *param, int cc)
 		DBG_PRINT(plocal->piflevel, "#endif");
 		if (minus) {
 			if (param->flags & PARSER_WARNING)
-				warning("unmatched #if block. reseted. [+%d %s]", tokenizer->lineno, tokenizer->path);
+				warning("unmatched #if block. reseted. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
 		} else {
 			if (plocal->curstack->if0only)
 				plocal->level = plocal->curstack->start;
 			else if (plocal->curstack->end != -1) {
 				if (plocal->curstack->end != plocal->level && (param->flags & PARSER_WARNING))
-					warning("uneven level. [+%d %s]", tokenizer->lineno, tokenizer->path);
+					warning("uneven level. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
 				plocal->level = plocal->curstack->end;
 			}
 		}

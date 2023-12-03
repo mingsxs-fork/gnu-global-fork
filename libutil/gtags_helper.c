@@ -34,7 +34,9 @@
 #include "test.h"
 #include "find.h"
 #include "path.h"
+#include "path_tree.h"
 #include "gtags_helper.h"
+#include "strlimcpy.h"
 
 
 /**
@@ -56,52 +58,59 @@ gtags_put_symbol(int type, const char *tag, int lno, const char *path, const cha
 	 */
 	for (p = tag; *p; p++) {
 		if (isspace(*p)) {
-			if (priv_data->conf_data.wflag)
+			if (priv_data->gconf.wflag)
 				warning("symbol name includs a space character. (Ignored) [+%d %s]", lno, path);
 			return;
 		}
 	}
 	if (p == tag) {
-		if (priv_data->conf_data.wflag)
+		if (priv_data->gconf.wflag)
 			warning("symbol name is null. (Ignored) [+%d %s]", lno, path);
 		return;
 	}
 	if (p - tag >= IDENTLEN) {
-		if (priv_data->conf_data.wflag)
+		if (priv_data->gconf.wflag)
 			warning("symbol name is too long. (Ignored) [+%d %s]", lno, path);
 		return;
 	}
 	switch (type) {
 	case PARSER_DEF:
-		gtop = priv_data->put_data.gtop[GTAGS];
+		gtop = priv_data->gtop[GTAGS];
 		break;
 	case PARSER_REF_SYM:
-		gtop = priv_data->put_data.gtop[GRTAGS];
+		gtop = priv_data->gtop[GRTAGS];
 		if (gtop == NULL)
 			return;
 		break;
 	default:
 		return;
 	}
-	gtags_put_using(gtop, tag, lno, priv_data->put_data.fid, line_image);
+	gtags_put_using(gtop, tag, lno, priv_data->gpath->fid, line_image);
 }
 
 void
 gtags_handle_path(const char *path, void *data)
 {
 	struct gtags_priv_data *priv_data = data;
+	struct gtags_path gpath = {0};
+	int parse_state = get_file_parse_state(path);
+	if (parse_state != FILE_PARSE_NEW)  /* file is under parsing */
+		return ;
 	if (!issourcefile(path)) {
 		if (!test("b", path))
 			/* other file like 'Makefile', non-binary */
 			gpath_put(path, GPATH_OTHER);
 		return;
 	}
-	gpath_put(path, GPATH_SOURCE);
-	priv_data->put_data.fid = gpath_path2fid(path, NULL);
-	if (priv_data->put_data.fid == NULL)
-		die("GPATH is corrupted.('%s' not found)", path);
-	(*priv_data->path_seqno)++; /* push file to parse stack, update counter */
-	parse_file(path, priv_data->conf_data.parser_flags, gtags_put_symbol, data);
-	gtags_flush(priv_data->put_data.gtop[GTAGS], priv_data->put_data.fid);
-	gtags_flush(priv_data->put_data.gtop[GRTAGS], priv_data->put_data.fid);
+	strlimcpy(gpath.path, path, sizeof(gpath.path));
+	gpath_put(gpath.path, GPATH_SOURCE);
+	gpath.fid = gpath_path2fid(gpath.path, NULL);
+	if (gpath.fid == NULL)
+		die("GPATH is corrupted.('%s' not found)", gpath.path);
+	set_file_parse_state(gpath.path, FILE_PARSE_PENDING);
+	parse_file(&gpath, priv_data->gconf.parser_flags, gtags_put_symbol, data);
+	set_file_parse_state(gpath.path, FILE_PARSE_DONE);
+	gtags_flush(priv_data->gtop[GTAGS], gpath.fid);
+	gtags_flush(priv_data->gtop[GRTAGS], gpath.fid);
+	(*priv_data->gpath_handled)++; /* update gpath counter */
 }

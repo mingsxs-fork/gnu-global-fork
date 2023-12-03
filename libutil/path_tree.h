@@ -22,11 +22,14 @@
 #ifndef _PATH_TREE_H_
 #define _PATH_TREE_H_
 
+#ifndef NAME_MAX
 #ifdef HAVE_LIMITS_H
 #include <limits.h>
 #else
-#define NAME_MAX 256
+#include "gparam.h"
+#define NAME_MAX MAXTOKEN
 #endif
+#endif /* #ifndef NAME_MAX */
 
 typedef struct path_node PATH_NODE;
 typedef struct path_list PATH_LIST;

@@ -62,8 +62,8 @@ java(const struct parser_param *param)
 	level = classlevel = 0;
 	startclass = startthrows = startequal = 0;
 
-	if (!opentoken(param->file))
-		die("'%s' cannot open.", param->file);
+	if (!opentoken(param->gpath->path))
+		die("'%s' cannot open.", param->gpath->path);
 	while ((c = nexttoken(interested, java_reserved_word)) != EOF) {
 		switch (c) {
 		case SYMBOL:					/* symbol */

@@ -368,8 +368,8 @@ path_tree_traverse(void *data)
 	STATIC_STRBUF(sb);
 	strbuf_clear(sb);
 	struct gtags_priv_data *priv_data = data;
-	if (priv_data->conf_data.vflag)
-		fprintf(stderr, "using path tree traverse method\n");
+	if (priv_data->gconf.vflag)
+		fprintf(stderr, " using path tree traverse method\n");
 	walk_path_tree(rootpath, sb, data);
 }
 
@@ -393,8 +393,8 @@ path_tree_search_name(const char *name, void *data)
 	PATH_LIST *walknode = dbop_get_generic(search_bucket, (void *)name, strlen(name)+1);
 	const char *path;
 	struct gtags_priv_data *priv_data = data;
-	if (priv_data->conf_data.vflag)
-		fprintf(stderr, "using path tree search name method\n");
+	if (priv_data->gconf.vflag)
+		fprintf(stderr, " using path tree search name method\n");
 	while (walknode) {
 		path = construct_path_from_leaf(walknode->path);
 		gtags_handle_path(path, data);

@@ -43,7 +43,7 @@
 	char *nl = strchr(line_image, '\n');				\
 	if (nl != NULL)							\
 		*nl = '\0';						\
-	param->put(type, tag, lno, param->file, line_image, param->arg);\
+	param->put(type, tag, lno, param->gpath->path, line_image, param->arg);\
 	if (nl != NULL)							\
 		*nl = '\n';						\
 } while (0)
@@ -150,8 +150,8 @@ line:	ASM_ENTRY '(' ASM_SYMBOL ')' error '\n'
 void
 assembly(const struct parser_param *param)
 {
-	if (linetable_open(param->file) == -1)
-		die("'%s' cannot open.", param->file);
+	if (linetable_open(param->gpath->path) == -1)
+		die("'%s' cannot open.", param->gpath->path);
 
 	asm_symtable = strbuf_open(0);
 	asm_initscan();

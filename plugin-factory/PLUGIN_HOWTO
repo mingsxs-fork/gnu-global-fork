@@ -37,7 +37,7 @@ like follows (pseudo code):
 void
 parser(const struct parser_param *param)
 {
-	open param->file
+	open param->gpath->path
 	while (read from file) {
 		if (definition)
 			param->put(PARSER_DEF, ...);
@@ -50,7 +50,7 @@ parser(const struct parser_param *param)
 }
 
 A param argument is given to each parser function.
-param->file is the path name of a source file which should be parsed.
+param->gpath->path is the path name of a source file which should be parsed.
 
 You can write a tag using the param argument like follows:
 

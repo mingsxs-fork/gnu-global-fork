@@ -272,7 +272,7 @@ put_line(char *line, const struct parser_param *param)
 		line++;
 	while (*line  && isspace((unsigned char)*line))
 		line++;
-	filename = strstr(line, param->file);
+	filename = strstr(line, param->gpath->path);
 	if (filename == NULL || filename == line)
 		return;
 	p = filename - 1;
@@ -298,7 +298,7 @@ put_line(char *line, const struct parser_param *param)
 	while (p >= line && !isspace((unsigned char)*p))
 		p--;
 	tagname = p + 1;
-	p = filename + strlen(param->file);
+	p = filename + strlen(param->gpath->path);
 	if (*p != '\0') {
 		if (!isspace((unsigned char)*p))
 			return;
@@ -320,7 +320,7 @@ parser(const struct parser_param *param)
 		start_process(param);
 
 	/* Write path of input file to pipe. */
-	fputs(param->file, op);
+	fputs(param->gpath->path, op);
 	putc('\n', op);
 	fflush(op);
 

@@ -412,30 +412,13 @@ getconf(const char *name)
  *	@param[in]	arg	argument for callback routine
  */
 void
-parse_file(const char *path, int flags, PARSER_CALLBACK put, void *arg)
+parse_file(struct gtags_path *gpath, int flags, PARSER_CALLBACK put, void *arg)
 {
-	const struct lang_entry *ent = get_parser(path);
-	int parse_state = get_file_parse_state(path);  /* check file parse state */
-	int vflag = ((struct gtags_priv_data *)arg)->conf_data.vflag;
-	int fileseqno;
+	const struct lang_entry *ent = get_parser(gpath->path);
 	if (ent) {
-		if (parse_state == FILE_PARSE_NEW) {
-			if (flags & PARSER_EXPLAIN)
-				fputs(get_explain(path, ent), stderr);
-			set_file_parse_state(path, FILE_PARSE_PENDING);
-			fileseqno = *priv_data->path_seqno;
-			if (vflag)
-				fprintf(stderr, " [%d] START of extracting tags of %s\n", fileseqno, trimpath(path));
-			execute_parser(ent, path, flags, put, arg);
-			if (vflag)
-				fprintf(stderr, " [%d] END of extracting tags of %s\n", fileseqno, trimpath(path));
-			set_file_parse_state(path, FILE_PARSE_DONE);
-		} else if (vflag) {
-			if (parse_state == FILE_PARSE_PENDING)
-				fprintf(stderr, "'%s' parse is pending, ignored.\n", path);
-			else if (parse_state == FILE_PARSE_DONE)
-				fprintf(stderr, "'%s' parse is done, ignored.\n", path);
-		}
+		if (flags & PARSER_EXPLAIN)
+			fputs(get_explain(gpath->path, ent), stderr);
+		execute_parser(ent, gpath, flags, put, arg);
 	}
 }
 /**
@@ -457,7 +440,7 @@ get_parser(const char *path)
  * execute_parser: execute parser.
  */
 void
-execute_parser(const struct lang_entry *ent, const char *path, int flags, PARSER_CALLBACK put, void *arg)
+execute_parser(const struct lang_entry *ent, struct gtags_path *gpath, int flags, PARSER_CALLBACK put, void *arg)
 {
 	struct parser_param param;
 	/*
@@ -465,7 +448,7 @@ execute_parser(const struct lang_entry *ent, const char *path, int flags, PARSER
 	 */
 	param.size = sizeof(param);
 	param.flags = flags;
-	param.file = path;
+	param.gpath = gpath;
 	param.put = put;
 	param.arg = arg;
 	param.isnotfunction = isnotfunction;

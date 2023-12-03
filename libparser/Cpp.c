@@ -90,8 +90,8 @@ Cpp(const struct parser_param *param)
 	savelevel = -1;
 	startclass = startthrow = startmacro = startsharp = startequal = 0;
 
-	if (!opentoken(param->file))
-		die("'%s' cannot open.", param->file);
+	if (!opentoken(param->gpath->path))
+		die("'%s' cannot open.", param->gpath->path);
 	cmode = 1;			/* allow token like '#xxx' */
 	crflag = 1;			/* require '\n' as a token */
 	cppmode = 1;			/* treat '::' as a token */

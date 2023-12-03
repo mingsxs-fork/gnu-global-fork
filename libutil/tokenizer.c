@@ -81,29 +81,29 @@ static struct tokenizer_ops default_ops = {
 
 int opened_tokenizers (void)
 {
-	if (unlike(empty_stack(tokenizer_stack)))
+	if (unlikely(empty_stack(tokenizer_stack)))
 		return 0;
 	return (tokenizer_stack->stack_top + 1);
 }
 
 int
-tokenizer_open (const char *path, struct tokenizer_ops *ops, void *lang_data)
+tokenizer_open (const struct gtags_path *gpath, struct tokenizer_ops *ops, void *lang_data)
 {
-	TOKENIZER *tokenizer;
+	TOKENIZER *t;
 	if (!tokenizer_stack)
 		tokenizer_stack = vstack_open(sizeof(struct tokenizer), STACK_EXPAND);
-	tokenizer = vstack_push(tokenizer_stack); /* allocate new tokenizer on stack */
+	t = vstack_push(tokenizer_stack); /* allocate new tokenizer on stack */
 	if (ops) {
-		tokenizer->op = ops;
+		t->op = ops;
 	} else {
-		tokenizer->op = &default_ops;
+		t->op = &default_ops;
 	}
-	tokenizer->lang_priv = lang_data; /* lang private data */
-	strlimcpy(tokenizer->path, path, sizeof(tokenizer->path));
-	if ((tokenizer->ip = fopen(path, "rb")) == NULL)
+	t->gpath = gpath;
+	t->lang_priv = lang_data; /* lang private data */
+	if ((t->ip = fopen(t->gpath->path, "rb")) == NULL)
 		goto failed;
-	tokenizer->ib = strbuf_open(MAXBUFLEN);
-	CURRENT = tokenizer; /* update CURRENT */
+	t->ib = strbuf_open(MAXBUFLEN);
+	CURRENT = t; /* update CURRENT */
 	return 1;
 
 failed:
@@ -430,7 +430,7 @@ def_tokenizer_nexttoken (const char *interested, int (* reserved)(const char *, 
 					*ptok++ = c;
 			}
 			if (unlikely(_tklen == sizeof(t->token))) {
-				warning("symbol name is too long. (Ignored) [+%d %s]", t->lineno, t->path);
+				warning("symbol name is too long. (Ignored) [+%d %s]", t->lineno, t->gpath->path);
 				t->token[0] = '\0';
 				continue;
 			}

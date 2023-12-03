@@ -27,14 +27,16 @@
 #else
 #include <strings.h>
 #endif
+#include "gparam.h"
 #include "gtagsop.h"
 
-struct put_func_data {
-	GTOP *gtop[GTAGLIM];
+struct gtags_path {
+	char path[MAXPATHLEN];
 	const char *fid;
+	unsigned int seq;
 };
 
-struct gtags_conf_data {
+struct gtags_conf {
 	int vflag;
 	int wflag;
 	int qflag;
@@ -46,18 +48,13 @@ struct gtags_conf_data {
 };
 
 struct gtags_priv_data {
-	int *path_seqno;
-	struct put_func_data put_data;
-	struct gtags_conf_data conf_data;
+	unsigned int *gpath_handled;  /* global */
+	GTOP *gtop[GTAGLIM]; /* global */
+	struct gtags_path *gpath; /* on stack */
+	struct gtags_conf gconf;  /* global */
 };
 
 void gtags_handle_path(const char *, void *);
 void gtags_put_symbol(int , const char *, int , const char *, const char *, void *);
-
-#define reset_gtags_priv_data(data) do {\
-	memset(&data.conf_data, 0x0, sizeof(struct gtags_conf_data));\
-	memset(&data.put_data, 0x0, sizeof(struct put_func_data));\
-	data.path_seqno = NULL;\
-} while (0)
 
 #endif /* ! _GTAGS_HELPER_H_ */

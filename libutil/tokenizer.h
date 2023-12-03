@@ -21,15 +21,11 @@
 #ifndef _TOKENIZER_H_
 #define _TOKENIZER_H_
 
-#ifdef HAVE_LIMITS_H
-#include <limits.h>
-#else
-#define PATH_MAX MAXPATHLEN
-#endif
 #include <ctype.h>
-
 #include "gparam.h"
+
 #include "strbuf.h"
+#include "gtags_helper.h"
 
 #define SYMBOL		0
 #define C_MODE		1
@@ -68,12 +64,12 @@ struct tokenizer {
 	const char *lp;
 	int crflag;
 	int mode;
-	char path[PATH_MAX];
 	int continued_line;
 	int lasttoken;
 	int lineno;
 	FILE *ip;
 	STRBUF *ib;
+	const struct gtags_path *gpath;
 	void *lang_priv;	/* language private data */
 
 /* tokenizer ops */
@@ -81,7 +77,7 @@ struct tokenizer {
 };
 
 
-int tokenizer_open(const char *, struct tokenizer_ops *, void *);
+int tokenizer_open(const struct gtags_path *, struct tokenizer_ops *, void *);
 void tokenizer_close(TOKENIZER *);
 TOKENIZER *current_tokenizer(void);
 int opened_tokenizers(void);
