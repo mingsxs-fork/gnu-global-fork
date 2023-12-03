@@ -100,9 +100,7 @@ gtags_handle_path(const char *path, void *data)
 	priv_data->put_data.fid = gpath_path2fid(path, NULL);
 	if (priv_data->put_data.fid == NULL)
 		die("GPATH is corrupted.('%s' not found)", path);
-	(*priv_data->path_seqno)++;
-	if (priv_data->conf_data.vflag);
-		fprintf(stderr, " [%d] extracting tags of %s\n", *priv_data->path_seqno, trimpath(path));
+	(*priv_data->path_seqno)++; /* push file to parse stack, update counter */
 	parse_file(path, priv_data->conf_data.parser_flags, gtags_put_symbol, data);
 	gtags_flush(priv_data->put_data.gtop[GTAGS], priv_data->put_data.fid);
 	gtags_flush(priv_data->put_data.gtop[GRTAGS], priv_data->put_data.fid);

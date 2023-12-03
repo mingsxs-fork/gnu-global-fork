@@ -155,6 +155,6 @@ GTP *gtags_first(GTOP *, const char *, int);
 GTP *gtags_next(GTOP *);
 void gtags_show_statistics(GTOP *);
 void gtags_close(GTOP *);
-int gtags_exists(GTOP *, const char *);
+int gtag_name_exists(GTOP *, const char *);
 
 #endif /* ! _GTOP_H_ */

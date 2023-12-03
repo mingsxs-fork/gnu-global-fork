@@ -26,6 +26,7 @@
 #else
 #define PATH_MAX MAXPATHLEN
 #endif
+#include <ctype.h>
 
 #include "gparam.h"
 #include "strbuf.h"
@@ -83,10 +84,12 @@ struct tokenizer {
 int tokenizer_open(const char *, struct tokenizer_ops *, void *);
 void tokenizer_close(TOKENIZER *);
 TOKENIZER *current_tokenizer(void);
+int opened_tokenizers(void);
 
 #define like_symbol_begin(c) (c & 0x80 || isalpha(c) || c == '_')
 #define like_symbol(c) (c & 0x80 || isalnum(c) || c == '_')
 #define cp_at_first(t) (t->sp && t->sp == (t->cp ? t->cp - 1 : t->lp))
+
 #if 0
 #define cp_at_first_nonspace(t) ({ \
 		const char *__sp = t->sp; \
@@ -96,6 +99,5 @@ TOKENIZER *current_tokenizer(void);
 		(__sp == __cp) ? 1 : 0; \
 		})
 #endif
-inline int cp_at_first_nonspace(TOKENIZER *);
 
 #endif /* ! _TOKENIZER_H_ */

@@ -57,19 +57,6 @@ static void process_inc_headers(const struct parser_param *, const char *);
 
 #define MAXPIFSTACK	100
 
-#if 0
-/*
- * #ifdef stack.
- */
-static struct {
-	short start;		/* level when '#if' block started */
-	short end;		/* level when '#if' block end */
-	short if0only;		/* '#if 0' or notdef only */
-} stack[MAXPIFSTACK], *cur;
-static int piflevel;		/* condition macro level */
-static int level;		/* brace level */
-static int externclevel;	/* 'extern "C"' block level */
-#endif
 
 /* lang parser local env on stack */
 struct _lang_local {
@@ -82,9 +69,9 @@ struct _lang_local {
 	int piflevel;
 	int level;
 	int externclevel;
-}
+};
 
-TOKENIZER *tokenizer;
+TOKENIZER *tokenizer;  /* THIS tokenizer under parsing */
 
 /**
  * yacc: read yacc file and pickup tag entries.
@@ -128,7 +115,7 @@ C_family(const struct parser_param *param, int type)
 	int yaccstatus = (type == TYPE_YACC) ? DECLARATIONS : PROGRAMS;
 	int inC = (type == TYPE_YACC) ? 0 : 1;	/* 1 while C source */
 
-	local.level = local.piflevel = local.externclevel = 0;
+	memset(&local, 0, sizeof(local));
 	savelevel = -1;
 	startmacro = startsharp = 0;
 
@@ -187,8 +174,8 @@ C_family(const struct parser_param *param, int type)
 			DBG_PRINT(local.level, "{"); /* } */
 			if (yaccstatus == RULES && local.level == 0)
 				inC = 1;
-			++(local.level);
-			if ((param->flags & PARSER_BEGIN_BLOCK) && atfirst) {
+			local.level++;
+			if ((param->flags & PARSER_BEGIN_BLOCK) && cp_at_first(tokenizer)) {
 				if ((param->flags & PARSER_WARNING) && local.level != 1)
 					warning("forced level 1 block start by '{' at column 0 [+%d %s].", tokenizer->lineno, tokenizer->path); /* } */
 				local.level = 1;
@@ -196,14 +183,15 @@ C_family(const struct parser_param *param, int type)
 			break;
 			/* { */
 		case '}':
-			if (--(local.level) < 0) {
+			local.level--;
+			if (local.level < 0) {
 				if (local.externclevel > 0)
 					local.externclevel--;
 				else if (param->flags & PARSER_WARNING)
 					warning("missing left '{' [+%d %s].", tokenizer->lineno, tokenizer->path); /* } */
 				local.level = 0;
 			}
-			if ((param->flags & PARSER_END_BLOCK) && atfirst) {
+			if ((param->flags & PARSER_END_BLOCK) && cp_at_first(tokenizer)) {
 				if ((param->flags & PARSER_WARNING) && local.level != 0) /* { */
 					warning("forced level 0 block end by '}' at column 0 [+%d %s].", tokenizer->lineno, tokenizer->path);
 				local.level = 0;
@@ -515,7 +503,7 @@ C_family(const struct parser_param *param, int type)
 	/* close current tokenizer */
 	tokenizer_close(tokenizer);
 	/* reset current tokenizer */
-	tokenizer = current_tokenizer;
+	tokenizer = current_tokenizer();
 }
 /**
  * process_attribute: skip attributes in '__attribute__((...))'.
@@ -644,9 +632,10 @@ condition_macro(const struct parser_param *param, int cc)
 	plocal->curstack = &plocal->stack[plocal->piflevel];
 	if (cc == SHARP_IFDEF || cc == SHARP_IFNDEF || cc == SHARP_IF) {
 		DBG_PRINT(plocal->piflevel, "#if");
-		if (++(plocal->piflevel) >= MAXPIFSTACK)
+		plocal->piflevel++;
+		if (plocal->piflevel >= MAXPIFSTACK)
 			die("#if stack over flow. [%s]", tokenizer->path);
-		++(plocal->curstack);
+		plocal->curstack++;
 		plocal->curstack->start = plocal->level;
 		plocal->curstack->end = -1;
 		plocal->curstack->if0only = 0;
@@ -666,8 +655,7 @@ condition_macro(const struct parser_param *param, int cc)
 		plocal->curstack->if0only = 0;
 	} else if (cc == SHARP_ENDIF) {
 		int minus = 0;
-
-		--(plocal->piflevel);
+		plocal->piflevel--;
 		if (plocal->piflevel < 0) {
 			minus = 1;
 			plocal->piflevel = 0;
@@ -698,7 +686,8 @@ condition_macro(const struct parser_param *param, int cc)
 static int
 enumerator_list(const struct parser_param *param)
 {
-	int savelevel = level;
+	struct _lang_local *plocal = tokenizer->lang_priv;
+	int savelevel = plocal->level;
 	int in_expression = 0;
 	int c = '{';
 
@@ -720,15 +709,16 @@ enumerator_list(const struct parser_param *param)
 			break;
 		case '{':
 		case '(':
-			level++;
+			plocal->level++;
 			break;
 		case '}':
 		case ')':
-			if (--level == savelevel)
+			plocal->level--;
+			if (plocal->level == savelevel)
 				return c;
 			break;
 		case ',':
-			if (level == savelevel + 1)
+			if (plocal->level == savelevel + 1)
 				in_expression = 0;
 			break;
 		case '=':

@@ -49,6 +49,7 @@
 
 
 #define STACK_EXPAND	32
+#define empty_stack(ts)	(!ts || ts->stack_top < 0)
 
 static VSTACK *tokenizer_stack = NULL;  /* global tokenizer stack */
 static TOKENIZER *CURRENT;
@@ -62,9 +63,10 @@ static int	def_tokenizer_nexttoken(const char *, int (*)(const char *, int));
 static void	def_tokenizer_pushbacktoken(void);
 static int	def_tokenizer_peekchar(int);
 static int	def_tokenizer_expectcharset(const char *, STRBUF *);
-static void	def_tokenizer_pushbackchar(void);
-static inline int def_tokenizer_nextchar(void);
-static inline void def_tokenizer_skipnext(int);
+static inline void	def_tokenizer_pushbackchar(void);
+static inline int	def_tokenizer_nextchar(void);
+static inline void	def_tokenizer_skipnext(int);
+static inline int	cp_at_first_nonspace(TOKENIZER *);
 
 static struct tokenizer_ops default_ops = {
 	.nexttoken		= def_tokenizer_nexttoken,
@@ -77,6 +79,13 @@ static struct tokenizer_ops default_ops = {
 };
 
 
+int opened_tokenizers (void)
+{
+	if (unlike(empty_stack(tokenizer_stack)))
+		return 0;
+	return (tokenizer_stack->stack_top + 1);
+}
+
 int
 tokenizer_open (const char *path, struct tokenizer_ops *ops, void *lang_data)
 {
@@ -84,7 +93,7 @@ tokenizer_open (const char *path, struct tokenizer_ops *ops, void *lang_data)
 	if (!tokenizer_stack)
 		tokenizer_stack = vstack_open(sizeof(struct tokenizer), STACK_EXPAND);
 	tokenizer = vstack_push(tokenizer_stack); /* allocate new tokenizer on stack */
-	if (!ops) {
+	if (ops) {
 		tokenizer->op = ops;
 	} else {
 		tokenizer->op = &default_ops;
@@ -105,40 +114,35 @@ failed:
 }
 
 void
-tokenizer_close (TOKENIZER *tokenizer)
+tokenizer_close (TOKENIZER *t)
 {
 	/* only close tokenizer if it's current tokenizer to avoid multiple close */
-	if (tokenizer && tokenizer == CURRENT) {
-		tokenizer = vstack_pop(tokenizer_stack);
-		if (tokenizer->ib) {
-			strbuf_close(tokenizer->ib);
-			tokenizer->ib = NULL;
+	if (t && t == CURRENT) {
+		t = vstack_pop(tokenizer_stack);
+		if (t->ib) {
+			strbuf_close(t->ib);
+			t->ib = NULL;
 		}
-		if (tokenizer->ip) {
-			fclose(tokenizer->ip);
-			tokenizer->ip = NULL;
+		if (t->ip) {
+			fclose(t->ip);
+			t->ip = NULL;
 		}
+		/* update CURRENT tokenizer pointer */
+		if (unlikely(empty_stack(tokenizer_stack)))
+			CURRENT = NULL;
+		else
+			CURRENT = vstack_top(tokenizer_stack);
 		/* free stack when empty */
 		if (tokenizer_stack->stack_top <= 0) {
 			vstack_close(tokenizer_stack);
 			tokenizer_stack = NULL;
 		}
-		if (tokenizer_stack)  /* update CURRENT */
-			CURRENT = vstack_top(tokenizer_stack);
-		else
-			CURRENT = NULL;
 	} else {
 		warning("close tokenizer from an illegal level, ignored");
 	}
 }
 
-TOKENIZER *
-current_tokenizer (void)
-{
-	return CURRENT;  /* return current tokenizer */
-}
-
-int
+static int
 cp_at_first_nonspace (TOKENIZER *t)
 {
 	const char *sp = t->sp;
@@ -147,6 +151,12 @@ cp_at_first_nonspace (TOKENIZER *t)
 	while (sp < ep && *sp && isspace(*sp))
 		sp++;
 	return (sp == ep) ? 1 : 0;
+}
+
+TOKENIZER *
+current_tokenizer (void)
+{
+	return CURRENT;  /* return current tokenizer */
 }
 
 static int
@@ -269,9 +279,8 @@ def_tokenizer_peekchar (int immediate)
 			} else if (unlikely(c == '/')) {			/* comment */
 				if (likely((c = getc(t->ip)) == '/')) {
 					while ((c = getc(t->ip)) != EOF)
-						if (unlikely(c == '\n')) {
+						if (unlikely(c == '\n'))
 							break;
-						}
 				} else if (likely(c == '*')) {
 					while ((c = getc(t->ip)) != EOF) {
 						if (unlikely(c == '*')) {
@@ -290,25 +299,29 @@ def_tokenizer_peekchar (int immediate)
 
 
 static int
-def_tokenizer_nexttoken (const char *interested,
-		int (* reserved)(const char *, int))
+def_tokenizer_nexttoken (const char *interested, int (* reserved)(const char *, int))
 {
 	TOKENIZER *t = CURRENT;
 	int c;
 	char *ptok;
-	int sharp = 0, percent = 0, quote;
+	int sharp = 0, percent = 0;
 
 /* function internal macros */
 #define _tklen (ptok - t->token)
-#define _do_rsvd_chk { \
+#define _append_tk { \
 	ptok    = t->token; \
 	*ptok++ = c; \
 	*ptok++ = t->op->nextchar(); \
 	*ptok   = '\0'; \
+}
+#define _break_on_rsvd { \
+	if (reserved && (c = (*reserved)(t->token, _tklen)) != 0) \
+		break; \
+}
+#define _break_on_norsvd { \
 	if (reserved && (c = (*reserved)(t->token, _tklen)) == 0) \
 		break; \
 }
-
 	if (unlikely(t->ptoken[0] != '\0')) {
 		strlimcpy(t->token, t->ptoken, sizeof(t->token));
 		t->ptoken[0] = '\0';
@@ -316,20 +329,19 @@ def_tokenizer_nexttoken (const char *interested,
 	}
 	for (;;) {
 		/* skip spaces */
-		if (unlikely(!t->crflag))
-			while ((c = t->op->nextchar()) != EOF && isspace(c))
+		if (likely(t->crflag))
+			while ((c = t->op->nextchar()) != EOF && isspace(c) && c != '\n')
 				;
 		else
-			while ((c = t->op->nextchar()) != EOF && isspace(c) && c != '\n')
+			while ((c = t->op->nextchar()) != EOF && isspace(c))
 				;
 		if (unlikely(c == EOF || c == '\n'))
 			break;
 		/* quoted string */
 		if (unlikely(c == '"' || c == '\'')) {
-			quote = c;
-
+			int quote = c;
 			while ((c = t->op->nextchar()) != EOF) {
-				if (likely(c == quote))
+				if (unlikely(c == quote))
 					break;
 				if (unlikely(quote == '\'' && c == '\n'))
 					break;
@@ -371,7 +383,8 @@ def_tokenizer_nexttoken (const char *interested,
 		else if (unlikely(c == '#' && t->mode & C_MODE)) {
 			// recognize '##' as a token if it is reserved word
 			if (unlikely(t->op->peekchar(1) == '#')) {
-				_do_rsvd_chk;
+				_append_tk;
+				_break_on_norsvd;
 			} else if (unlikely(!t->continued_line && cp_at_first_nonspace(t))) {
 				sharp = 1;
 				continue;
@@ -379,9 +392,10 @@ def_tokenizer_nexttoken (const char *interested,
 		}
 		/* cpp namespace var */
 		else if (unlikely(c == ':' && t->mode & CPP_MODE && t->op->peekchar(1) == ':')) {
-			_do_rsvd_chk;
+			_append_tk;
+			_break_on_norsvd;
 		}
-		/* yacc */
+		/* yacc indicator */
 		else if (unlikely(c == '%' && t->mode & Y_MODE)) {
 			// recognize '%%' as a token if it is reserved word.
 			if (cp_at_first(t)) {
@@ -390,8 +404,7 @@ def_tokenizer_nexttoken (const char *interested,
 				if (likely((c = t->op->peekchar(1)) == '%' || c == '{' || c == '}')) {
 					*ptok++ = t->op->nextchar();
 					*ptok   = 0;
-					if (reserved && (c = (*reserved)(t->token, _tklen)) != 0)
-						break;
+					_break_on_rsvd;
 				} else if (unlikely(!isspace(c))) {
 					percent = 1;
 					continue;
@@ -428,10 +441,12 @@ def_tokenizer_nexttoken (const char *interested,
 			c = SYMBOL;
 			if (reserved)
 				c = (*reserved)(t->token, _tklen);
-			break; /* symbol */
+			break;
 		}
 /* remove function internal macros */
-#undef _do_rsvd_chk
+#undef _append_tk
+#undef _break_on_rsvd
+#undef _break_on_norsvd
 #undef _tklen
 		/* special char */
 		else {

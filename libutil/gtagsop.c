@@ -1205,3 +1205,13 @@ segment_read(GTOP *gtop)
 		qsort(gtop->gtp_array, gtop->gtp_count, sizeof(GTP),
 			gtop->flags & GTOP_NEARSORT ? compare_neartags : compare_tags);
 }
+
+int
+gtag_name_exists(GTOP *gtop, const char *name)
+{
+	if (gtop->gtag_names) {
+		if (dbop_exists_key(gtop->gtag_names, name))
+			return 1;
+	}
+	return 0;
+}
