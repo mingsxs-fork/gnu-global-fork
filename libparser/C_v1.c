@@ -34,6 +34,7 @@
 #include "c_res.h"
 #include "strbuf.h"
 #include "strlimcpy.h"
+#include "checkalloc.h"
 #include "tokenizer.h"
 #include "path.h"
 #include "path_tree.h"
@@ -81,12 +82,21 @@ TOKENIZER *tokenizer;  /* THIS tokenizer under parsing */
 void
 yacc(const struct parser_param *param)
 {
+	static int parse_level = 0;
 	struct gtags_priv_data *priv_data = param->arg;
-	if (priv_data->gconf.vflag)
-		fprintf(stderr, " [%d] START extracting YACC tags of %s\n", priv_data->gpath->seq, trimpath(priv_data->gpath->path));
+	char *sign;
+	if (priv_data->gconf.vflag) {
+		sign = check_malloc(++parse_level);
+		memset(sign, '-', parse_level);
+		*(sign + parse_level - 1) = '\0';
+		fprintf(stderr, " [%d] %s>START extracting YACC tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
+	}
 	C_family(param, TYPE_YACC);
-	if (priv_data->gconf.vflag)
-		fprintf(stderr, " [%d] END extracting YACC tags of %s\n", priv_data->gpath->seq, trimpath(priv_data->gpath->path));
+	if (priv_data->gconf.vflag) {
+		fprintf(stderr, " [%d] %s>END extracting YACC tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
+		free(sign);
+		--parse_level;
+	}
 
 }
 /**
@@ -95,12 +105,21 @@ yacc(const struct parser_param *param)
 void
 C(const struct parser_param *param)
 {
+	static int parse_level = 0;
 	struct gtags_priv_data *priv_data = param->arg;
-	if (priv_data->gconf.vflag)
-		fprintf(stderr, " [%d] START extracting C tags of %s\n", priv_data->gpath->seq, trimpath(priv_data->gpath->path));
+	char *sign;
+	if (priv_data->gconf.vflag) {
+		sign = check_malloc(++parse_level);
+		memset(sign, '-', parse_level);
+		*(sign + parse_level - 1) = '\0';
+		fprintf(stderr, " [%d] %s>START extracting C tags of %s\n", param->gpath->seq, sign,trimpath(param->gpath->path));
+	}
 	C_family(param, TYPE_C);
-	if (priv_data->gconf.vflag)
-		fprintf(stderr, " [%d] END extracting C tags of %s\n", priv_data->gpath->seq, trimpath(priv_data->gpath->path));
+	if (priv_data->gconf.vflag) {
+		fprintf(stderr, " [%d] %s>END extracting C tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
+		free(sign);
+		--parse_level;
+	}
 }
 /**
  *	@param[in]	param	source file
@@ -187,7 +206,7 @@ C_family(const struct parser_param *param, int type)
 			DBG_PRINT(local.level, "{"); /* } */
 			if (yaccstatus == RULES && local.level == 0)
 				inC = 1;
-			local.level++;
+			++local.level;
 			if ((param->flags & PARSER_BEGIN_BLOCK) && cp_at_first(tokenizer)) {
 				if ((param->flags & PARSER_WARNING) && local.level != 1)
 					warning("forced level 1 block start by '{' at column 0 [+%d %s].", tokenizer->lineno, tokenizer->gpath->path); /* } */
@@ -196,8 +215,7 @@ C_family(const struct parser_param *param, int type)
 			break;
 			/* { */
 		case '}':
-			local.level--;
-			if (local.level < 0) {
+			if (--local.level < 0) {
 				if (local.externclevel > 0)
 					local.externclevel--;
 				else if (param->flags & PARSER_WARNING)
@@ -432,7 +450,7 @@ C_family(const struct parser_param *param, int type)
 								local.level++;
 							else if (c == '}') {
 								savetok[0] = 0;
-								if (--(local.level) == typedef_savelevel)
+								if (--local.level == typedef_savelevel)
 									break;
 							} else if (c == SYMBOL) {
 								if (local.level > typedef_savelevel)
@@ -645,10 +663,9 @@ condition_macro(const struct parser_param *param, int cc)
 	plocal->curstack = &plocal->stack[plocal->piflevel];
 	if (cc == SHARP_IFDEF || cc == SHARP_IFNDEF || cc == SHARP_IF) {
 		DBG_PRINT(plocal->piflevel, "#if");
-		plocal->piflevel++;
-		if (plocal->piflevel >= MAXPIFSTACK)
+		if (++plocal->piflevel >= MAXPIFSTACK)
 			die("#if stack over flow. [%s]", tokenizer->gpath->path);
-		plocal->curstack++;
+		++plocal->curstack;
 		plocal->curstack->start = plocal->level;
 		plocal->curstack->end = -1;
 		plocal->curstack->if0only = 0;
@@ -668,8 +685,7 @@ condition_macro(const struct parser_param *param, int cc)
 		plocal->curstack->if0only = 0;
 	} else if (cc == SHARP_ENDIF) {
 		int minus = 0;
-		plocal->piflevel--;
-		if (plocal->piflevel < 0) {
+		if (--plocal->piflevel < 0) {
 			minus = 1;
 			plocal->piflevel = 0;
 		}
@@ -726,8 +742,7 @@ enumerator_list(const struct parser_param *param)
 			break;
 		case '}':
 		case ')':
-			plocal->level--;
-			if (plocal->level == savelevel)
+			if (--plocal->level == savelevel)
 				return c;
 			break;
 		case ',':

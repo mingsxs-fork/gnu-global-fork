@@ -86,11 +86,11 @@ vstack_push(VSTACK *vs)
 void *
 vstack_pop(VSTACK *vs)
 {
+	void *entry = vstack_top(vs);
 	if (unlikely(--vs->stack_top < 0)) {
-		vs->stack_top = -1;
-		return NULL;
+		vs->stack_top = -1; /* emtpy */
 	}
-	return varray_assign(vs->varray, vs->stack_top, 0);
+	return entry;
 }
 /**
  * vstack_top: return the top entry of the stack.

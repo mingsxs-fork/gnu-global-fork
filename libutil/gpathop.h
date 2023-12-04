@@ -35,8 +35,6 @@
 #define GPATH_SOURCE	1
 #define GPATH_OTHER	2
 #define GPATH_BOTH	3
-#define	GPATH_LAST_PATH	4	/* last put path */
-#define	GPATH_LAST_FID	5	/* last put path fid */
 /*
  * flags
  */

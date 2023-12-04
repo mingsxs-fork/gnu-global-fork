@@ -878,6 +878,7 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 	g_priv_data.gconf.iflag = iflag;
 	g_priv_data.gconf.extractmethod = extractmethod;
 	g_priv_data.gconf.explain = explain;
+	g_priv_data.gpath = &gpath;
 
 	if (vflag)
 		fprintf(stderr, "[%s] Updating '%s' and '%s'.\n", now(), dbname(GTAGS), dbname(GRTAGS));

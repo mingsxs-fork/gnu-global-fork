@@ -164,11 +164,6 @@ gpath_put(const char *path, int type)
 {
 	static char sfid[MAXFIDLEN];
 	STATIC_STRBUF(sb);
-	/* cache return */
-	if (type == GPATH_LAST_PATH)
-		return (const char *)strbuf_value(sb);
-	if (type == GPATH_LAST_FID)
-		return (const char *)sfid;
 	assert(opened > 0);
 	if (_mode == 1 && created)
 		return "";
@@ -204,10 +199,8 @@ gpath_put(const char *path, int type)
 const char *
 gpath_path2fid(const char *path, int *type)
 {
-	if (!strcmp(path, gpath_put(NULL, GPATH_LAST_PATH)))
-		return gpath_put(NULL, GPATH_LAST_FID);
-	const char *fid = dbop_get(dbop, path);
 	assert(opened > 0);
+	const char *fid = dbop_get(dbop, path);
 	if (fid && type) {
 		const char *flag = dbop_getflag(dbop);
 		*type = (*flag == 'o') ? GPATH_OTHER : GPATH_SOURCE;
@@ -227,10 +220,8 @@ gpath_path2fid(const char *path, int *type)
 const char *
 gpath_fid2path(const char *fid, int *type)
 {
-	if (!strcmp(fid, gpath_put(NULL, GPATH_LAST_FID)))
-		return gpath_put(NULL, GPATH_LAST_PATH);
-	const char *path = dbop_get(dbop, fid);
 	assert(opened > 0);
+	const char *path = dbop_get(dbop, fid);
 	if (path && type) {
 		const char *flag = dbop_getflag(dbop);
 		*type = (*flag == 'o') ? GPATH_OTHER : GPATH_SOURCE;
@@ -249,10 +240,8 @@ gpath_fid2path(const char *fid, int *type)
 int
 gpath_path2nfid(const char *path, int *type)
 {
-	if (!strcmp(path, gpath_put(NULL, GPATH_LAST_PATH)))
-		return atoi(gpath_put(NULL, GPATH_LAST_FID));
-	const char *sfid = gpath_path2fid(path, type);
-	return sfid == NULL ? 0 : atoi(sfid);
+	const char *fid = gpath_path2fid(path, type);
+	return fid == NULL ? 0 : atoi(fid);
 }
 /*
  * gpath_nfid2path: convert id into path
@@ -266,11 +255,9 @@ gpath_path2nfid(const char *path, int *type)
 const char *
 gpath_nfid2path(int nfid, int *type)
 {
-	char sfid[MAXFIDLEN];
-	snprintf(sfid, sizeof(sfid), "%d", nfid);
-	if (!strcmp(sfid, gpath_put(NULL, GPATH_LAST_FID)))
-		return gpath_put(NULL, GPATH_LAST_PATH);
-	return gpath_fid2path(sfid, type);
+	char fid[MAXFIDLEN];
+	snprintf(fid, sizeof(fid), "%d", nfid);
+	return gpath_fid2path(fid, type);
 }
 /**
  * gpath_delete: delete specified path record

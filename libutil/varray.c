@@ -77,6 +77,17 @@ for (i = 0; i < vb->length; i++)
 
 #define DEFAULT_EXPAND	100
 static int debug = 0;
+#ifdef USE_VARRAY_STATISTICS
+struct varray_statistics {
+	unsigned int nvarray;
+	unsigned int opened;
+	unsigned int closed;
+	unsigned int alloced;
+	unsigned int freed;
+	unsigned int size;
+};
+static struct varray_statistics vbstatistics = {0};
+#endif
 /**
  * varray_open: open virtual array.
  *
@@ -98,6 +109,10 @@ varray_open(int size, int expand)
 	vb->alloced = vb->length = 0;
 	vb->expand = (expand == 0) ? DEFAULT_EXPAND : expand;
 	vb->vbuf = NULL;
+#ifdef USE_VARRAY_STATISTICS
+	vbstatistics.opened++;
+	vbstatistics.nvarray++;
+#endif
 	return vb;
 }
 /**
@@ -142,6 +157,10 @@ varray_assign(VARRAY *vb, int index, int force)
 			vb->vbuf = (char *)check_malloc(vb->size * vb->alloced);
 		else
 			vb->vbuf = (char *)check_realloc(vb->vbuf, vb->size * vb->alloced);
+#ifdef USE_VARRAY_STATISTICS
+		vbstatistics.alloced += vb->size * (vb->alloced - old_alloced);
+		vbstatistics.size += vb->size * (vb->alloced - old_alloced);
+#endif
 		if (debug)
 			fprintf(stderr, "Expanded: from %d to %d.\n", old_alloced, vb->alloced);
 	}
@@ -180,6 +199,12 @@ void
 varray_close(VARRAY *vb)
 {
 	if (vb) {
+#ifdef USE_VARRAY_STATISTICS
+		vbstatistics.closed++;
+		vbstatistics.nvarray--;
+		vbstatistics.size -= vb->alloced * vb->size;
+		vbstatistics.freed += vb->size * vb->alloced;
+#endif
 		if (vb->vbuf)
 			(void)free(vb->vbuf);
 		(void)free(vb);

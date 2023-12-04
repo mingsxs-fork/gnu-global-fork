@@ -91,8 +91,10 @@ gtags_put_symbol(int type, const char *tag, int lno, const char *path, const cha
 void
 gtags_handle_path(const char *path, void *data)
 {
+	static unsigned int seqno = 0;
 	struct gtags_priv_data *priv_data = data;
-	struct gtags_path gpath = {0};
+	struct gtags_path gpath_top = {0};  /* gpath stack top */
+	struct gtags_path *gpath_prev = priv_data->gpath; /* last gpath on stack */
 	int parse_state = get_file_parse_state(path);
 	if (parse_state != FILE_PARSE_NEW)  /* file is under parsing */
 		return ;
@@ -102,15 +104,18 @@ gtags_handle_path(const char *path, void *data)
 			gpath_put(path, GPATH_OTHER);
 		return;
 	}
-	strlimcpy(gpath.path, path, sizeof(gpath.path));
-	gpath_put(gpath.path, GPATH_SOURCE);
-	gpath.fid = gpath_path2fid(gpath.path, NULL);
-	if (gpath.fid == NULL)
-		die("GPATH is corrupted.('%s' not found)", gpath.path);
-	set_file_parse_state(gpath.path, FILE_PARSE_PENDING);
-	parse_file(&gpath, priv_data->gconf.parser_flags, gtags_put_symbol, data);
-	set_file_parse_state(gpath.path, FILE_PARSE_DONE);
-	gtags_flush(priv_data->gtop[GTAGS], gpath.fid);
-	gtags_flush(priv_data->gtop[GRTAGS], gpath.fid);
+	strlimcpy(gpath_top.path, path, sizeof(gpath_top.path));
+	gpath_put(gpath_top.path, GPATH_SOURCE);
+	gpath_top.fid = gpath_path2fid(gpath_top.path, NULL);
+	if (gpath_top.fid == NULL)
+		die("GPATH is corrupted.('%s' not found)", gpath_top.path);
+	gpath_top.seq = ++seqno;
+	priv_data->gpath = &gpath_top;
+	set_file_parse_state(gpath_top.path, FILE_PARSE_PENDING);
+	parse_file(&gpath_top, priv_data->gconf.parser_flags, gtags_put_symbol, data);
+	set_file_parse_state(gpath_top.path, FILE_PARSE_DONE);
+	priv_data->gpath = gpath_prev; /* restore gpath stack */
+	gtags_flush(priv_data->gtop[GTAGS], gpath_top.fid);
+	gtags_flush(priv_data->gtop[GRTAGS], gpath_top.fid);
 	(*priv_data->gpath_handled)++; /* update gpath counter */
 }
