@@ -37,13 +37,14 @@ struct gtags_path {
 };
 
 struct gtags_conf {
-	int vflag;
-	int wflag;
-	int qflag;
-	int debug;
-	int iflag;
-	int explain;
-	int extractmethod;
+	unsigned int vflag:1;
+	unsigned int wflag:1;
+	unsigned int qflag:1;
+	unsigned int debug:1;
+	unsigned int iflag:1;
+	unsigned int explain:1;
+	unsigned int extractmethod:1;
+	unsigned int incremental:1;
 	int parser_flags;
 };
 
@@ -54,7 +55,7 @@ struct gtags_priv_data {
 	struct gtags_conf gconf;  /* global */
 };
 
-void gtags_handle_path(const char *, void *);
+int gtags_handle_path(const char *, void *);
 void gtags_put_symbol(int , const char *, int , const char *, const char *, void *);
 
 #endif /* ! _GTAGS_HELPER_H_ */

@@ -326,7 +326,7 @@ void *
 dbop_get_generic(DBOP *dbop, void *name, size_t size)
 {
 	DB *db = dbop->db;
-	DBT key, dat;
+	DBT key = {0}, dat = {0};
 	int status;
 
 #ifdef USE_SQLITE3
@@ -554,7 +554,7 @@ const char *
 dbop_first(DBOP *dbop, const char *name, regex_t *preg, int flags)
 {
 	DB *db = dbop->db;
-	DBT key, dat;
+	DBT key, dat = {0};
 	int status;
 	int len;
 
@@ -638,7 +638,7 @@ dbop_next(DBOP *dbop)
 {
 	DB *db = dbop->db;
 	int flags = dbop->ioflags;
-	DBT key, dat;
+	DBT key, dat = {0};
 	int status;
 
 	if (dbop->unread) {

@@ -78,7 +78,7 @@ vstack_push(VSTACK *vs)
 	return entry;
 }
 /**
- * vstack_pop: pop the top entry of the stack.
+ * vstack_pop_xxx: pop the top entry of the stack.
  *
  *	@param[in]	vs	VSTACK structure
  *	@return		pointer of the entry
@@ -91,6 +91,15 @@ vstack_pop(VSTACK *vs)
 		vs->stack_top = -1; /* emtpy */
 	}
 	return entry;
+}
+void *
+vstack_pop_second(VSTACK *vs)
+{
+	if (--vs->stack_top < 0) {
+		vs->stack_top = -1;
+		return NULL;
+	}
+	return varray_assign(vs->varray, vs->stack_top, 0);
 }
 /**
  * vstack_top: return the top entry of the stack.
@@ -117,4 +126,16 @@ vstack_close(VSTACK *vs)
 		varray_close(vs->varray);
 		(void)free(vs);
 	}
+}
+/**
+ * vstack_empty: check if stack empty.
+ *
+ *	@param[in]	vs	VSTACK structure
+ */
+int
+vstack_empty(VSTACK *vs)
+{
+	if (unlikely(vs->stack_top < 0))
+		return 1;
+	return 0;
 }

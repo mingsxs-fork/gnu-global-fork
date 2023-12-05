@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3.8
 #
 # Copyright (c) 2014
 #	Yoshitaro Makise

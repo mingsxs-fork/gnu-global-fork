@@ -76,8 +76,9 @@ for (i = 0; i < vb->length; i++)
 */
 
 #define DEFAULT_EXPAND	100
+#ifdef USE_VARRAY_DEBUG
 static int debug = 0;
-#ifdef USE_VARRAY_STATISTICS
+
 struct varray_statistics {
 	unsigned int nvarray;
 	unsigned int opened;
@@ -101,15 +102,15 @@ varray_open(int size, int expand)
 {
 	VARRAY *vb = (VARRAY *)check_calloc(sizeof(VARRAY), 1);
 
-	if (size < 1)
+	if (unlikely(size < 1))
 		die("varray_open: size < 1.");
-	if (expand < 0)
+	if (unlikely(expand < 0))
 		die("varray_open: expand < 0.");
 	vb->size = size;
 	vb->alloced = vb->length = 0;
 	vb->expand = (expand == 0) ? DEFAULT_EXPAND : expand;
 	vb->vbuf = NULL;
-#ifdef USE_VARRAY_STATISTICS
+#ifdef USE_VARRAY_DEBUG
 	vbstatistics.opened++;
 	vbstatistics.nvarray++;
 #endif
@@ -157,12 +158,13 @@ varray_assign(VARRAY *vb, int index, int force)
 			vb->vbuf = (char *)check_malloc(vb->size * vb->alloced);
 		else
 			vb->vbuf = (char *)check_realloc(vb->vbuf, vb->size * vb->alloced);
-#ifdef USE_VARRAY_STATISTICS
-		vbstatistics.alloced += vb->size * (vb->alloced - old_alloced);
-		vbstatistics.size += vb->size * (vb->alloced - old_alloced);
-#endif
+#ifdef USE_VARRAY_DEBUG
+		int sizediff = (vb->alloced - old_alloced) * vb->size;
+		vbstatistics.alloced += sizediff;
+		vbstatistics.size += sizediff;
 		if (debug)
 			fprintf(stderr, "Expanded: from %d to %d.\n", old_alloced, vb->alloced);
+#endif
 	}
 	return (void *)(vb->vbuf + vb->size * index);
 }
@@ -179,6 +181,19 @@ void *
 varray_append(VARRAY *vb)
 {
 	return varray_assign(vb, vb->length, 1);
+}
+/**
+ * varray_end: end entry of varray.
+ *
+ *	@param[in]	vb	VARRAY structure
+ *	@return		pointer of the entry
+ *
+ * This procedure doesn't operate the contents of the array.
+ */
+void *
+varray_end(VARRAY *vb)
+{
+	return varray_assign(vb, vb->length-1, 0);
 }
 /**
  * varray_reset: reset varray array.
@@ -199,7 +214,7 @@ void
 varray_close(VARRAY *vb)
 {
 	if (vb) {
-#ifdef USE_VARRAY_STATISTICS
+#ifdef USE_VARRAY_DEBUG
 		vbstatistics.closed++;
 		vbstatistics.nvarray--;
 		vbstatistics.size -= vb->alloced * vb->size;

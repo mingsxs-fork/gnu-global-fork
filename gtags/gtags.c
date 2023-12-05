@@ -664,6 +664,16 @@ incremental(const char *dbpath, const char *root)
 	const char *path;
 	unsigned int id, limit;
 
+	memset(&g_priv_data, 0, sizeof(g_priv_data));
+	g_priv_data.gconf.vflag =			!!vflag;
+	g_priv_data.gconf.wflag =			!!wflag;
+	g_priv_data.gconf.qflag =			!!qflag;
+	g_priv_data.gconf.debug =			!!debug;
+	g_priv_data.gconf.iflag =			!!iflag;
+	g_priv_data.gconf.extractmethod =	!!extractmethod;
+	g_priv_data.gconf.explain =			!!explain;
+	g_priv_data.gconf.incremental =		!!1;
+
 	tim = statistics_time_start("Time of inspecting %s and %s.", dbname(GTAGS), dbname(GRTAGS));
 	if (vflag) {
 		fprintf(stderr, " Tag found in '%s'.\n", dbpath);
@@ -869,15 +879,6 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 	int seqno;
 	const char *path, *start, *end;
 	struct gtags_path gpath = {0};
-
-	memset(&g_priv_data, 0, sizeof(g_priv_data));
-	g_priv_data.gconf.vflag = vflag;
-	g_priv_data.gconf.wflag = wflag;
-	g_priv_data.gconf.qflag = qflag;
-	g_priv_data.gconf.debug = debug;
-	g_priv_data.gconf.iflag = iflag;
-	g_priv_data.gconf.extractmethod = extractmethod;
-	g_priv_data.gconf.explain = explain;
 	g_priv_data.gpath = &gpath;
 
 	if (vflag)
@@ -950,9 +951,9 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 		if (vflag)
 			fprintf(stderr, " [%d/%d] extracting tags of %s\n", seqno, total, trimpath(gpath.path));
 		parse_file(&gpath, g_priv_data.gconf.parser_flags, gtags_put_symbol, &g_priv_data);
-		gtags_flush(g_priv_data.gtop[GTAGS], gpath.fid);
+		gtags_flush(g_priv_data.gtop[GTAGS]);
 		if (g_priv_data.gtop[GRTAGS] != NULL)
-			gtags_flush(g_priv_data.gtop[GRTAGS], gpath.fid);
+			gtags_flush(g_priv_data.gtop[GRTAGS]);
 	}
 	parser_exit();
 	gtags_close(g_priv_data.gtop[GTAGS]);
@@ -974,13 +975,13 @@ createtags(const char *dbpath, const char *root)
 
 	memset(&g_priv_data, 0, sizeof(g_priv_data));
 	g_priv_data.gpath_handled = &total;
-	g_priv_data.gconf.vflag = vflag;
-	g_priv_data.gconf.wflag = wflag;
-	g_priv_data.gconf.qflag = qflag;
-	g_priv_data.gconf.debug = debug;
-	g_priv_data.gconf.iflag = iflag;
-	g_priv_data.gconf.extractmethod = extractmethod;
-	g_priv_data.gconf.explain = explain;
+	g_priv_data.gconf.vflag =			!!vflag;
+	g_priv_data.gconf.wflag = 			!!wflag;
+	g_priv_data.gconf.qflag = 			!!qflag;
+	g_priv_data.gconf.debug = 			!!debug;
+	g_priv_data.gconf.iflag = 			!!iflag;
+	g_priv_data.gconf.extractmethod =	!!extractmethod;
+	g_priv_data.gconf.explain =			!!explain;
 
 	tim = statistics_time_start("Time of creating %s and %s.", dbname(GTAGS), dbname(GRTAGS));
 	if (vflag)
@@ -1013,11 +1014,13 @@ createtags(const char *dbpath, const char *root)
 	if (file_list)
 		find_open_filelist(file_list, root, explain);
 	else
-		build_path_tree(NULL);
+		make_path_tree(NULL);
 	/* start parsing source files */
-	path_tree_traverse(&g_priv_data);
+	if (path_tree_traverse(gtags_handle_path, &g_priv_data) != 0)
+		die("traverse path tree failed, gtags stopped.");
 	gtags_close(g_priv_data.gtop[GTAGS]);
 	gtags_close(g_priv_data.gtop[GRTAGS]);
+	free_path_tree();
 	statistics_time_end(tim);
 	strbuf_reset(sb);
 	if (getconfs("GTAGS_extra", sb)) {

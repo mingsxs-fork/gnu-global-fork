@@ -301,13 +301,17 @@ C_family(const struct parser_param *param, int type)
 			break;
 		case SHARP_INCLUDE:
 		case SHARP_INCLUDE_NEXT:
-			/* process included headers */
-			strbuf_clear(sb);
-			/* skip to certain charset */
-			(void)tokenizer->op->expectcharset("\"<", NULL);
-			if ((c = tokenizer->op->expectcharset("\">", sb)) != EOF && c != '\n')
-				process_inc_headers(param, strbuf_value(sb));
-			break;
+#if 0
+			if (!((struct gtags_priv_data *)param->arg)->gconf.incremental) { /* TODO, not doing this for incremental mode */
+				/* process included headers */
+				strbuf_clear(sb);
+				/* skip to certain charset */
+				(void)tokenizer->op->expectcharset("\"<", NULL);
+				if ((c = tokenizer->op->expectcharset("\">", sb)) != EOF && c != '\n')
+					process_inc_headers(param, strbuf_value(sb));
+				break;
+			}
+#endif
 		case SHARP_IMPORT:
 		case SHARP_ERROR:
 		case SHARP_LINE:
@@ -775,5 +779,6 @@ process_inc_headers(const struct parser_param *param, const char *header)
 	/* reversely find the sep to get header filename */
 	while (p-- > header && *p != sep);
 	++p;
-	path_tree_search_name(p, param->arg);
+	if (path_tree_search_name(p, gtags_handle_path, param->arg) != 0)
+		die("handle path tree search faield, gtags stopped.");
 }

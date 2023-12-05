@@ -26,38 +26,33 @@
 #ifdef HAVE_LIMITS_H
 #include <limits.h>
 #else
-#include "gparam.h"
-#define NAME_MAX MAXTOKEN
+#include "varray.h"
+#define NAME_MAX 255
 #endif
 #endif /* #ifndef NAME_MAX */
 
 typedef struct path_node PATH_NODE;
-typedef struct path_list PATH_LIST;
-
-struct path_list {
-	struct path_node *path;
-	struct path_list *next;
-};
 
 struct path_node {
 	char name[NAME_MAX];
-	struct path_node *parentpath;  /* parent path node of current path */
-	struct path_list *childpaths;  /* child paths contained by current path, a linked list */
+	VARRAY_LOC parentloc;	/* parent path node of current path */
+	VARRAY *childpaths;		/* child paths included by current path */
 };
 
 typedef enum {
-	FILE_PARSE_NEW = 0,
-	FILE_PARSE_PENDING,
-	FILE_PARSE_DONE,
+	FILE_PARSE_NEW		= 0,
+	FILE_PARSE_PENDING	= 1,
+	FILE_PARSE_DONE		= 2,
 } file_parse_state_e;
 
-void build_path_tree(const char *);
-void destroy_path_tree(void);
-void path_tree_traverse(void *);
-void path_tree_search_name(const char *, void *);
+void make_path_tree(const char *);
+void free_path_tree(void);
+int path_tree_traverse(int (*)(const char *, void *), void *);
+int path_tree_search_name(const char *, int(*)(const char *, void *), void *);
 void set_file_parse_state(const char *, file_parse_state_e);
 int get_file_parse_state(const char *);
-const char *commonprefix(const char *, const char *);
+
+int path_tree_no_handler(const char *, void * __attribute__((unused)));
 
 #endif /* ! _PATH_TREE_H_ */
 

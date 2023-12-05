@@ -30,6 +30,8 @@
 #include "strbuf.h"
 #include "strhash.h"
 #include "varray.h"
+#include "vstack.h"
+#include "pool.h"
 
 #define COMPACTKEY	" __.COMPACT"
 #define COMPRESSKEY	" __.COMPRESS"
@@ -87,6 +89,11 @@
 			/** don't sort */
 #define GTOP_NOSORT		128
 
+/*
+ * Defines for gtags vstacks GTVSTACK
+ */
+#define GTVSTACK_DEFAULT_EXPAND 32
+
 /**
  * This entry corresponds to one raw record.
  */
@@ -96,6 +103,12 @@ typedef struct {
 	const char *tag;
 	int lineno;
 } GTP;
+
+typedef struct {
+	VSTACK *vs_taghash;
+	VSTACK *vs_fid;
+	POOL *pool;
+} GTVSTACK;
 
 typedef struct {
 	DBOP *dbop;			/**< descripter of DBOP */
@@ -133,9 +146,10 @@ typedef struct {
 	STRBUF *sb;			/**< string buffer */
 	STRBUF *sb_compress;		/**< string buffer */
 
-	/** used for compact format and path name only read */
+	/** used for path name only read */
 	STRHASH *path_hash;
-
+	/** used for compact format */
+	GTVSTACK *vstacks;
 	/*
 	 * Stuff for calling dbop
 	 */
@@ -149,12 +163,12 @@ typedef struct {
 const char *dbname(int);
 GTOP *gtags_open(const char *, const char *, int, int, int);
 void gtags_put_using(GTOP *, const char *, int, const char *, const char *);
-void gtags_flush(GTOP *, const char *);
+void gtags_flush(GTOP *);
 void gtags_delete(GTOP *, IDSET *);
 GTP *gtags_first(GTOP *, const char *, int);
 GTP *gtags_next(GTOP *);
 void gtags_show_statistics(GTOP *);
 void gtags_close(GTOP *);
-int gtag_name_exists(GTOP *, const char *);
+int gtags_exists(GTOP *, const char *);
 
 #endif /* ! _GTOP_H_ */

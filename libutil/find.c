@@ -957,7 +957,7 @@ find_read_traverse(void)
 		/*
 		 * Pop stack.
 		 */
-		curp = vstack_pop(vstack);
+		curp = vstack_pop_second(vstack);
 		if (curp == NULL)
 			break;
 		*(curp->dirp) = 0;
