@@ -92,3 +92,4 @@ htags/java.c
 htags/asm.c
 libltdl/**/*.c
 libltdl/**/*.h
+m4/*
