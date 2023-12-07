@@ -85,3 +85,10 @@ doc/**
 
 # generated
 plugin-factory/pygments_parser.py
+htags/php.c
+htags/c.c
+htags/cpp.c
+htags/java.c
+htags/asm.c
+libltdl/**/*.c
+libltdl/**/*.h
