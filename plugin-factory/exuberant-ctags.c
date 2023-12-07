@@ -315,50 +315,50 @@ put_line(char *ctags_x, const struct parser_param *param)
 	while (*ctags_x  && isspace((unsigned char)*ctags_x))
 		ctags_x++;
 #endif
-	filename = strstr(ctags_x, param->file);
+	filename = strstr(ctags_x, param->gpath->path);
 	if (filename == NULL || filename == ctags_x) {
-		param->warning("%s: file name not found in the tag record. ignored.", param->file);
+		param->warning("%s: file name not found in the tag record. ignored.", param->gpath->path);
 		return;
 	}
 	p = filename - 1;
 	if (!isspace((unsigned char)*p)) {
-		param->warning(linenumbernotfound, param->file);
+		param->warning(linenumbernotfound, param->gpath->path);
 		return;
 	}
 	while (p >= ctags_x && isspace((unsigned char)*p))
 		*p-- = '\0';
 	if (p < ctags_x) {
-		param->warning(linenumbernotfound, param->file);
+		param->warning(linenumbernotfound, param->gpath->path);
 		return;
 	}
 	if (!isdigit((unsigned char)*p)) {
-		param->warning(linenumbernotfound, param->file);
+		param->warning(linenumbernotfound, param->gpath->path);
 		return;
 	}
 	while (p >= ctags_x && isdigit((unsigned char)*p))
 		p--;
 	if (p < ctags_x) {
-		param->warning(linenumbernotfound, param->file);
+		param->warning(linenumbernotfound, param->gpath->path);
 		return;
 	}
 	lineno = atoi(p + 1);
 	if (!isspace((unsigned char)*p)) {
-		param->warning(tagnamenotfound, param->file);
+		param->warning(tagnamenotfound, param->gpath->path);
 		return;
 	}
 	while (p >= ctags_x && isspace((unsigned char)*p))
 		*p-- = '\0';
 	if (p < ctags_x) {
-		param->warning(tagnamenotfound, param->file);
+		param->warning(tagnamenotfound, param->gpath->path);
 		return;
 	}
 	while (p >= ctags_x && !isspace((unsigned char)*p))
 		p--;
 	tagname = p + 1;
-	p = filename + strlen(param->file);
+	p = filename + strlen(param->gpath->path);
 	if (*p != '\0') {
 		if (!isspace((unsigned char)*p)) {
-			param->warning("%s: source code image not found in the tag record. ignored.", param->file);
+			param->warning("%s: source code image not found in the tag record. ignored.", param->gpath->path);
 			return;
 		}
 		*p++ = '\0';
@@ -379,7 +379,7 @@ parser(const struct parser_param *param)
 		start_ctags(param);
 
 	/* Write path of input file to pipe. */
-	fputs(param->file, op);
+	fputs(param->gpath->path, op);
 	putc('\n', op);
 	fflush(op);
 

@@ -51,6 +51,8 @@
 #include "strbuf.h"
 #include "strmake.h"
 #include "test.h"
+#include "path_tree.h"
+#include "gtags_helper.h"
 
 #define NOTFUNCTION	".notfunction"
 #ifdef __DJGPP__
@@ -410,13 +412,13 @@ getconf(const char *name)
  *	@param[in]	arg	argument for callback routine
  */
 void
-parse_file(const char *path, int flags, PARSER_CALLBACK put, void *arg)
+parse_file(struct gtags_path *gpath, int flags, PARSER_CALLBACK put, void *arg)
 {
-	const struct lang_entry *ent = get_parser(path);
+	const struct lang_entry *ent = get_parser(gpath->path);
 	if (ent) {
 		if (flags & PARSER_EXPLAIN)
-			fputs(get_explain(path, ent), stderr);
-		execute_parser(ent, path, flags, put, arg);
+			fputs(get_explain(gpath->path, ent), stderr);
+		execute_parser(ent, gpath, flags, put, arg);
 	}
 }
 /**
@@ -438,7 +440,7 @@ get_parser(const char *path)
  * execute_parser: execute parser.
  */
 void
-execute_parser(const struct lang_entry *ent, const char *path, int flags, PARSER_CALLBACK put, void *arg)
+execute_parser(const struct lang_entry *ent, struct gtags_path *gpath, int flags, PARSER_CALLBACK put, void *arg)
 {
 	struct parser_param param;
 	/*
@@ -446,7 +448,7 @@ execute_parser(const struct lang_entry *ent, const char *path, int flags, PARSER
 	 */
 	param.size = sizeof(param);
 	param.flags = flags;
-	param.file = path;
+	param.gpath = gpath;
 	param.put = put;
 	param.arg = arg;
 	param.isnotfunction = isnotfunction;

@@ -123,7 +123,8 @@ typedef	struct {
 
 DBOP *dbop_open(const char *, int, int, int);
 const char *dbop_get(DBOP *, const char *);
-void dbop_put(DBOP *, const char *, const char *);
+void dbop_put_generic(DBOP *, void *, size_t, void *, size_t, int);
+void *dbop_get_generic(DBOP *, void *, size_t);
 void dbop_put_tag(DBOP *, const char *, const char *);
 void dbop_put_path(DBOP *, const char *, const char *, const char *);
 void dbop_delete(DBOP *, const char *);
@@ -138,5 +139,10 @@ void dbop_putoption(DBOP *, const char *, const char *);
 int dbop_getversion(DBOP *);
 void dbop_putversion(DBOP *, int);
 void dbop_close(DBOP *);
+int dbop_exists_key(DBOP *, const char *);
+
+#define	dbop_put(db, key, data)		dbop_put_generic(db, (void *)key, strlen(key)+1, (void *)data, strlen(data)+1, 0)
+#define	dbop_put_key_only(db, key)	dbop_put_generic(db, (void *)key, strlen(key)+1, NULL, 0, R_NOOVERWRITE)
+#define dbop_get(db, key)			(const char *)dbop_get_generic(db, (void *)key, strlen(key)+1)
 
 #endif /* _DBOP_H_ */

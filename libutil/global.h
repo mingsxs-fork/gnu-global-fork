@@ -36,6 +36,7 @@
 #include "env.h"
 #include "fileop.h"
 #include "find.h"
+#include "path_tree.h"
 #include "format.h"
 #include "getdbpath.h"
 #include "gparam.h"
@@ -66,5 +67,6 @@
 #include "version.h"
 #include "varray.h"
 #include "xargs.h"
+#include "gtags_helper.h"
 
 #endif /* ! _GLOBAL_H_ */

@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 1997, 1998, 1999, 2000, 2001, 2002, 2005, 2012, 2015
- *	Tama Communications Corporation
+ * Copyright (c) Ming Li
+ *
+ * adgio.ming@gmail.com
  *
  * This file is part of GNU GLOBAL.
  *
@@ -18,24 +19,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _FIND_H_
-#define _FIND_H_
+#ifndef _LIKELY_H_
+#define _LIKELY_H_
 
-#define SKIP_SYMLINK_FOR_DIR	1
-#define SKIP_SYMLINK_FOR_FILE	2
-#define SKIP_SYMLINK_FOR_ALL	3
+/* definition of likely macros */
 
-void set_accept_dotfiles(void);
-void set_skip_unreadable(void);
-int get_skip_unreadable(void);
-void set_skip_symlink(int);
-int get_skip_symlink(void);
-int skipthisfile(const char *);
-int issourcefile(const char *);
-int ignore_path(const char *path);
-void find_open(const char *, int);
-void find_open_filelist(const char *, const char *, int);
-char *find_read(void);
-void find_close(void);
+#define likely(X)	__builtin_expect(!!(X), 1)
+#define unlikely(X)	__builtin_expect(!!(X), 0)
 
-#endif /* ! _FIND_H_ */
+#endif /* ! _LIKELY_H_ */

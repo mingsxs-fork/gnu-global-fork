@@ -27,6 +27,7 @@
 #include "checkalloc.h"
 #include "die.h"
 #include "varray.h"
+#include "likely.h"
 
 /*
 
@@ -75,7 +76,19 @@ for (i = 0; i < vb->length; i++)
 */
 
 #define DEFAULT_EXPAND	100
+#ifdef USE_VARRAY_DEBUG
 static int debug = 0;
+
+struct varray_statistics {
+	unsigned int nvarray;
+	unsigned int opened;
+	unsigned int closed;
+	unsigned int alloced;
+	unsigned int freed;
+	unsigned int size;
+};
+static struct varray_statistics vbstatistics = {0};
+#endif
 /**
  * varray_open: open virtual array.
  *
@@ -89,14 +102,18 @@ varray_open(int size, int expand)
 {
 	VARRAY *vb = (VARRAY *)check_calloc(sizeof(VARRAY), 1);
 
-	if (size < 1)
+	if (unlikely(size < 1))
 		die("varray_open: size < 1.");
-	if (expand < 0)
+	if (unlikely(expand < 0))
 		die("varray_open: expand < 0.");
 	vb->size = size;
 	vb->alloced = vb->length = 0;
 	vb->expand = (expand == 0) ? DEFAULT_EXPAND : expand;
 	vb->vbuf = NULL;
+#ifdef USE_VARRAY_DEBUG
+	vbstatistics.opened++;
+	vbstatistics.nvarray++;
+#endif
 	return vb;
 }
 /**
@@ -114,12 +131,12 @@ varray_open(int size, int expand)
 void *
 varray_assign(VARRAY *vb, int index, int force)
 {
-	if (index < 0)
+	if (unlikely(index < 0))
 		die("varray_assign: invalid index value.");
-	if (index >= vb->length) {
-		if (force)
+	if (unlikely(index >= vb->length)) {
+		if (likely(force))
 			vb->length = index + 1;
-		else if (index == 0 && vb->length == 0)
+		else if (unlikely(index == 0 && vb->length == 0))
 			return NULL;
 		else
 			die("varray_assign: index(=%d) is out of range.", index);
@@ -127,7 +144,7 @@ varray_assign(VARRAY *vb, int index, int force)
 	/*
  	 * Expand the area.
 	 */
-	if (index >= vb->alloced) {
+	if (unlikely(index >= vb->alloced)) {
 		int old_alloced = vb->alloced;
 
 		while (index >= vb->alloced)
@@ -137,12 +154,17 @@ varray_assign(VARRAY *vb, int index, int force)
 		 * when a null pointer is passed.
 		 * Therefore, we cannot use realloc(NULL, ...).
 		 */
-		if (vb->vbuf == NULL)
+		if (unlikely(vb->vbuf == NULL))
 			vb->vbuf = (char *)check_malloc(vb->size * vb->alloced);
 		else
 			vb->vbuf = (char *)check_realloc(vb->vbuf, vb->size * vb->alloced);
+#ifdef USE_VARRAY_DEBUG
+		int sizediff = (vb->alloced - old_alloced) * vb->size;
+		vbstatistics.alloced += sizediff;
+		vbstatistics.size += sizediff;
 		if (debug)
 			fprintf(stderr, "Expanded: from %d to %d.\n", old_alloced, vb->alloced);
+#endif
 	}
 	return (void *)(vb->vbuf + vb->size * index);
 }
@@ -159,6 +181,19 @@ void *
 varray_append(VARRAY *vb)
 {
 	return varray_assign(vb, vb->length, 1);
+}
+/**
+ * varray_end: end entry of varray.
+ *
+ *	@param[in]	vb	VARRAY structure
+ *	@return		pointer of the entry
+ *
+ * This procedure doesn't operate the contents of the array.
+ */
+void *
+varray_end(VARRAY *vb)
+{
+	return varray_assign(vb, vb->length-1, 0);
 }
 /**
  * varray_reset: reset varray array.
@@ -179,6 +214,12 @@ void
 varray_close(VARRAY *vb)
 {
 	if (vb) {
+#ifdef USE_VARRAY_DEBUG
+		vbstatistics.closed++;
+		vbstatistics.nvarray--;
+		vbstatistics.size -= vb->alloced * vb->size;
+		vbstatistics.freed += vb->size * vb->alloced;
+#endif
 		if (vb->vbuf)
 			(void)free(vb->vbuf);
 		(void)free(vb);

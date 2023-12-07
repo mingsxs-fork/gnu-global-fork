@@ -164,7 +164,6 @@ gpath_put(const char *path, int type)
 {
 	static char sfid[MAXFIDLEN];
 	STATIC_STRBUF(sb);
-
 	assert(opened > 0);
 	if (_mode == 1 && created)
 		return "";
@@ -200,8 +199,8 @@ gpath_put(const char *path, int type)
 const char *
 gpath_path2fid(const char *path, int *type)
 {
-	const char *fid = dbop_get(dbop, path);
 	assert(opened > 0);
+	const char *fid = dbop_get(dbop, path);
 	if (fid && type) {
 		const char *flag = dbop_getflag(dbop);
 		*type = (*flag == 'o') ? GPATH_OTHER : GPATH_SOURCE;
@@ -221,8 +220,8 @@ gpath_path2fid(const char *path, int *type)
 const char *
 gpath_fid2path(const char *fid, int *type)
 {
-	const char *path = dbop_get(dbop, fid);
 	assert(opened > 0);
+	const char *path = dbop_get(dbop, fid);
 	if (path && type) {
 		const char *flag = dbop_getflag(dbop);
 		*type = (*flag == 'o') ? GPATH_OTHER : GPATH_SOURCE;
@@ -241,8 +240,8 @@ gpath_fid2path(const char *fid, int *type)
 int
 gpath_path2nfid(const char *path, int *type)
 {
-	const char *sfid = gpath_path2fid(path, type);
-	return sfid == NULL ? 0 : atoi(sfid);
+	const char *fid = gpath_path2fid(path, type);
+	return fid == NULL ? 0 : atoi(fid);
 }
 /*
  * gpath_nfid2path: convert id into path
@@ -256,9 +255,9 @@ gpath_path2nfid(const char *path, int *type)
 const char *
 gpath_nfid2path(int nfid, int *type)
 {
-	char sfid[MAXFIDLEN];
-	snprintf(sfid, sizeof(sfid), "%d", nfid);
-	return gpath_fid2path(sfid, type);
+	char fid[MAXFIDLEN];
+	snprintf(fid, sizeof(fid), "%d", nfid);
+	return gpath_fid2path(fid, type);
 }
 /**
  * gpath_delete: delete specified path record

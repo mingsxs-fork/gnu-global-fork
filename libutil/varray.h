@@ -20,17 +20,26 @@
 #define _VARRAY_H
 
 typedef struct _varray {
-        char *vbuf;
+	char *vbuf;
 	int size;
 	int length;
 	int alloced;
 	int expand;
 } VARRAY;
 
+/* to correctly keep the address of VARRAY elements */
+typedef struct _varray_loc {
+	VARRAY *vb;
+	int index;
+} VARRAY_LOC;
+
 VARRAY *varray_open(int, int);
 void *varray_assign(VARRAY *, int, int);
 void *varray_append(VARRAY *);
+void *varray_end(VARRAY *);
 void varray_reset(VARRAY *);
 void varray_close(VARRAY *);
+
+#define varray_end_index(vb) (vb->length-1)
 
 #endif /* ! _VARRAY_H */

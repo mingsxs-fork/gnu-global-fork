@@ -64,7 +64,7 @@
 	char *nl = strchr(line_image, '\n');				\
 	if (nl != NULL)							\
 		*nl = '\0';						\
-	param->put(type, tag, lno, param->file, line_image, param->arg);\
+	param->put(type, tag, lno, param->gpath->path, line_image, param->arg);\
 	if (nl != NULL)							\
 		*nl = '\n';						\
 } while (0)
@@ -103,7 +103,7 @@ WORD		{ALPHA}{ALPHANUM}*
 	"*"+"/"		{ yy_pop_state(); }
 	<<EOF>> {
 		if (param->flags & PARSER_WARNING)
-			warning("unexpected eof. [+%d %s]", LEXLINENO, param->file);
+			warning("unexpected eof. [+%d %s]", LEXLINENO, param->gpath->path);
 		yyterminate();
 	}
 }

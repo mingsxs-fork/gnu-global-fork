@@ -40,9 +40,11 @@ typedef struct {
 	 */
 	struct sh_entry *cur_entry;
 	int cur_bucket;
+	int pool_private;		/* memory pool is allocated privately */
 } STRHASH;
 
 STRHASH *strhash_open(int);
+void strhash_init(STRHASH *, int, POOL *);
 struct sh_entry *strhash_assign(STRHASH *, const char *, int);
 char * strhash_strdup(STRHASH *, const char *, int);
 struct sh_entry *strhash_first(STRHASH *);
@@ -50,5 +52,7 @@ struct sh_entry *strhash_next(STRHASH *);
 void strhash_reset(STRHASH *);
 void strhash_dump(STRHASH *);
 void strhash_close(STRHASH *);
+void strhash_close_buckets(STRHASH *);
+struct sh_entry *strhash_pop(STRHASH *, const char *);
 
 #endif /* ! _STRHASH_H */

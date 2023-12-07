@@ -21,6 +21,8 @@
 #ifndef _PARSER_H_
 #define _PARSER_H_
 
+#include "gtags_helper.h"
+
 /*
  * Built-in parser base on gctags
  */
@@ -53,9 +55,9 @@ typedef void (*PARSER_CALLBACK)(int, const char *, int, const char *, const char
 struct parser_param {
 	int size;		/**< size of this structure */
 	int flags;
-	const char *file;
-	PARSER_CALLBACK put;
+	struct gtags_path *gpath;  /* on stack */
 	void *arg;
+	PARSER_CALLBACK put;
 	int (*isnotfunction)(const char *);
 	const char *langmap;
 	char *(*getconf)(const char *);
@@ -65,9 +67,9 @@ struct parser_param {
 };
 
 typedef void (*PARSER)(const struct parser_param *);
-void parse_file(const char *, int, PARSER_CALLBACK, void *);
+void parse_file(struct gtags_path *, int, PARSER_CALLBACK, void *);
 const struct lang_entry *get_parser(const char *);
-void execute_parser(const struct lang_entry *, const char *, int, PARSER_CALLBACK, void *);
+void execute_parser(const struct lang_entry *, struct gtags_path *, int, PARSER_CALLBACK, void *);
 const char *get_explain(const char *, const struct lang_entry *);
 
 #endif

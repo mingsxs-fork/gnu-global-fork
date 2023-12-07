@@ -11,5 +11,5 @@
 void
 parser(const struct parser_param *param)
 {
-	param->warning("nop parser: %s", param->file);
+	param->warning("nop parser: %s", param->gpath->path);
 }

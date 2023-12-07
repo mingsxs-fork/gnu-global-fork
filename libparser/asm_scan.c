@@ -1,4 +1,4 @@
-#line 1 "asm_scan.c"
+#line 2 "asm_scan.c"
 /*
  * Copyright (c) 2002, 2004, 2010 Tama Communications Corporation
  *
@@ -64,14 +64,14 @@
 	char *nl = strchr(line_image, '\n');				\
 	if (nl != NULL)							\
 		*nl = '\0';						\
-	param->put(type, tag, lno, param->file, line_image, param->arg);\
+	param->put(type, tag, lno, param->gpath->path, line_image, param->arg);\
 	if (nl != NULL)							\
 		*nl = '\n';						\
 } while (0)
 
 static int last_directive;
 
-#line 74 "asm_scan.c"
+#line 75 "asm_scan.c"
 
 #define  YY_INT_ALIGNED short int
 
@@ -969,7 +969,7 @@ char *yytext;
 
 
 
-#line 972 "asm_scan.c"
+#line 973 "asm_scan.c"
 
 #define INITIAL 0
 #define C_COMMENT 1
@@ -1207,7 +1207,7 @@ YY_DECL
 
 #line 94 "asm_scan.l"
  /* Ignore spaces */
-#line 1210 "asm_scan.c"
+#line 1211 "asm_scan.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1314,7 +1314,7 @@ case YY_STATE_EOF(C_COMMENT):
 #line 105 "asm_scan.l"
 {
 		if (param->flags & PARSER_WARNING)
-			warning("unexpected eof. [+%d %s]", LEXLINENO, param->file);
+			warning("unexpected eof. [+%d %s]", LEXLINENO, param->gpath->path);
 		yyterminate();
 	}
 	YY_BREAK
@@ -1533,7 +1533,7 @@ YY_RULE_SETUP
 #line 204 "asm_scan.l"
 ECHO;
 	YY_BREAK
-#line 1536 "asm_scan.c"
+#line 1537 "asm_scan.c"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(CPP_COMMENT):
 case YY_STATE_EOF(STRING):

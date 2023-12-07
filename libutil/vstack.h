@@ -29,7 +29,9 @@ typedef struct {
 VSTACK *vstack_open(int, int);
 void *vstack_push(VSTACK *);
 void *vstack_pop(VSTACK *);
+void *vstack_pop_second(VSTACK *);
 void *vstack_top(VSTACK *);
 void vstack_close(VSTACK *);
+int vstack_empty(VSTACK *);
 
 #endif /* ! _VSTACK_H */

@@ -1751,8 +1751,8 @@ parsefile(char *const *argv, const char *cwd, const char *root, const char *dbpa
 	STRBUF *sb = strbuf_open(0);
 	char *langmap;
 	const char *plugin_parser, *av;
-	char path[MAXPATHLEN];
 	struct parsefile_data data;
+	struct gtags_path gpath = {0};
 
 	flags = 0;
 	if (vflag)
@@ -1806,12 +1806,12 @@ parsefile(char *const *argv, const char *cwd, const char *root, const char *dbpa
 		/*
 		 * convert the path into relative to the root directory of source tree.
 		 */
-		if (normalize(av, get_root_with_slash(), cwd, path, sizeof(path)) == NULL) {
+		if (normalize(av, get_root_with_slash(), cwd, gpath.path, sizeof(gpath.path)) == NULL) {
 			if (!qflag)
 				die("'%s' is out of the source project.", av);
 			continue;
 		}
-		if (!test("f", makepath(root, path, NULL))) {
+		if (!test("f", makepath(root, gpath.path, NULL))) {
 			if (!qflag) {
 				if (test("d", NULL))
 					die("'%s' is not a source file.", av);
@@ -1826,20 +1826,20 @@ parsefile(char *const *argv, const char *cwd, const char *root, const char *dbpa
 		{
 			static char s_fid[MAXFIDLEN];
 			int type = 0;
-			const char *p = gpath_path2fid(path, &type);
+			gpath.fid = gpath_path2fid(gpath.path, &type);
 
-			if (!p || type != GPATH_SOURCE) {
+			if (!gpath.fid || type != GPATH_SOURCE) {
 				if (!qflag)
 					die("'%s' is not a source file.", av);
 				continue;
 			}
-			strlimcpy(s_fid, p, sizeof(s_fid));
+			strlimcpy(s_fid, gpath.fid, sizeof(s_fid));
 			data.fid = s_fid;
 		}
-		if (Sflag && !locatestring(path, localprefix, MATCH_AT_FIRST))
+		if (Sflag && !locatestring(gpath.path, localprefix, MATCH_AT_FIRST))
 			continue;
 		data.count = 0;
-		parse_file(path, flags, put_syms, &data);
+		parse_file(&gpath, flags, put_syms, &data);
 		count += data.count;
 	}
 	args_close();

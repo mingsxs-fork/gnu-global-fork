@@ -90,8 +90,36 @@ strhash_open(int buckets)
 		SLIST_INIT(&sh->htab[i]);
 	sh->buckets = buckets;
 	sh->pool = pool_open();
+	sh->pool_private = 1;
 	sh->entries = 0;
+	sh->cur_bucket = -1;
 	return sh;
+}
+/**
+ * strhash_init: init sizeof(STRHASH) memory to a new STRHASH object.
+ *
+ * @param[in]	sh	STRHASH memory allocated by others.
+ * @param[in]	buckets	size of bucket table
+ * @param[in]	pool	memory pool opened by otheres.
+ *
+ */
+void
+strhash_init(STRHASH *sh, int buckets, POOL *pool)
+{
+	sh->htab = (struct sh_head *)check_calloc(sizeof(struct sh_head), buckets);
+	for (int i = 0; i < buckets; i++)
+		SLIST_INIT(&sh->htab[i]);
+	sh->buckets = buckets;
+	sh->entries = 0;
+	sh->cur_bucket = -1;
+	sh->cur_entry = NULL;
+	if (pool) {
+		sh->pool = pool;
+		sh->pool_private = 0;
+	} else {
+		sh->pool = pool_open();
+		sh->pool_private = 1;
+	}
 }
 /**
  * strhash_assign: assign hash entry.
@@ -197,8 +225,11 @@ strhash_reset(STRHASH *sh)
 	/*
 	 * Free all memory in sh->pool but leave it valid for further allocation.
 	 */
-	pool_reset(sh->pool);
+	if (sh->pool_private)
+		pool_reset(sh->pool);
 	sh->entries = 0;
+	sh->cur_entry = NULL;
+	sh->cur_bucket = -1;
 }
 /**
  * strhash_dump: dump contents of the string table
@@ -209,7 +240,7 @@ strhash_dump(STRHASH *sh)
 	struct sh_entry *p;
 
 	for (p = strhash_first(sh); p != NULL; p = strhash_next(sh))
-		fprintf(stderr, "%s => %s\n", p->name, p->value);
+		fprintf(stderr, "%s => %s\n", p->name, (char *)p->value);
 }
 /**
  * strhash_close: close hash array.
@@ -219,7 +250,51 @@ strhash_dump(STRHASH *sh)
 void
 strhash_close(STRHASH *sh)
 {
-	pool_close(sh->pool);
+	if (sh->pool_private)
+		pool_close(sh->pool);
 	free(sh->htab);
 	free(sh);
+}
+/**
+ * strhash_close_buckets: close hash htabs.
+ *
+ *	@param[in]	sh	STRHASH structure
+ */
+void
+strhash_close_buckets(STRHASH *sh)
+{
+	if (sh->pool_private)
+		pool_close(sh->pool);
+	free(sh->htab);
+	sh->htab = NULL;
+	sh->cur_entry = NULL;
+	sh->cur_bucket = -1;
+	sh->buckets = 0;
+}
+
+struct sh_entry *
+strhash_pop(STRHASH *sh, const char *name)
+{
+	struct sh_head *head = &sh->htab[__hash_string(name) % sh->buckets];
+	struct sh_entry *entry, *entry_prev = NULL, *entry_next;
+	/*
+	 * Lookup the name's entry.
+	 */
+	SLIST_FOREACH(entry, head, ptr) {
+		if (strcmp(entry->name, name) == 0)
+			break;
+		entry_prev = entry;
+	}
+	if (entry) {
+		entry_next = SLIST_NEXT(entry, ptr);
+		if (entry_prev)
+			SLIST_NEXT(entry_prev, ptr) = entry_next;
+		else
+			if (entry_next)
+				SLIST_INSERT_HEAD(head, entry_next, ptr);
+			else
+				SLIST_INIT(head);
+		SLIST_NEXT(entry, ptr) = NULL;
+	}
+	return entry;
 }
