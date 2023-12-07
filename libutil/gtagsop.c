@@ -1042,7 +1042,7 @@ flush_pool(GTOP *gtop)
 	int header_offset;
 	int i, last;
 
-	if (unlikely(!gtop->vstacks))
+	if (!gtop->vstacks || vstack_empty(gtop->vstacks->vs_fid))
 		return ;
 	STRHASH *taghash = vstack_pop(gtop->vstacks->vs_taghash);
 	const char **pfid = vstack_pop(gtop->vstacks->vs_fid);
