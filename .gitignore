@@ -82,3 +82,6 @@ doc/**
 
 # generated const header
 **/const.h
+
+# generated
+plugin-factory/pygments_parser.py
