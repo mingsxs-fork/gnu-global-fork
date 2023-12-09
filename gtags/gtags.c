@@ -498,16 +498,16 @@ main(int argc, char **argv)
 	 * tag files.
 	 */
 	if (iflag) {
-		if (argc > 0)
+		if (argc > 0) {
 			if (realpath(*argv, dbpath) == NULL)
 				die("invalid dbpath given: %s.", *argv);
-		else if (!gtagsexist(cwd, dbpath, MAXPATHLEN, vflag))
+		} else if (!gtagsexist(cwd, dbpath, MAXPATHLEN, vflag))
 			strlimcpy(dbpath, cwd, sizeof(dbpath));
 	} else {
-		if (argc > 0)
+		if (argc > 0) {
 			if (realpath(*argv, dbpath) == NULL)
 				die("invalid dbpath given: %s.", *argv);
-		else if (Oflag) {
+		} else if (Oflag) {
 			char *objdir = getobjdir(cwd, vflag);
 
 			if (objdir == NULL)
