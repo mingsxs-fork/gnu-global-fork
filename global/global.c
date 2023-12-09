@@ -364,7 +364,7 @@ finish:
 		char libdbpath[MAXPATHLEN];
 		char *libdir = NULL, *nextp = NULL;
 
-		sb = strbuf_pool_assign(0);
+		sb = strbuf_open(0);
 		strbuf_puts(sb, getenv("GTAGSLIBPATH"));
 		back2slash(sb);
 		for (libdir = strbuf_value(sb); db != GTAGS && libdir; libdir = nextp) {
@@ -379,7 +379,7 @@ finish:
 				db = GTAGS;
 			gtags_close(gtop);
 		}
-		strbuf_pool_release(sb);
+		strbuf_close(sb);
 	}
 	return db;
 }
@@ -391,7 +391,6 @@ main(int argc, char **argv)
 	int optchar;
 	int option_index = 0;
 	int status = 0;
-	strbuf_pool_init(1024);
 
 	/*
 	 * pick up --gtagsconf, --gtagslabel and --directory (-C).
@@ -725,7 +724,7 @@ main(int argc, char **argv)
 		 * main      10 /prj/xxx/src/main.c  main(argc, argv)\n
 		 * main      22 /prj/xxx/libc/func.c   main(argc, argv)\n
 		 */
-		STRBUF *ib = strbuf_pool_assign(MAXBUFLEN);
+		STRBUF *ib = strbuf_open(MAXBUFLEN);
 		CONVERT *cv;
 		char *ctags_x;
 
@@ -735,7 +734,7 @@ main(int argc, char **argv)
 		while ((ctags_x = strbuf_fgets(ib, stdin, STRBUF_NOCRLF)) != NULL)
 			convert_put(cv, ctags_x);
 		convert_close(cv);
-		strbuf_pool_release(ib);
+		strbuf_close(ib);
 		exit(0);
 	}
 	/*
@@ -818,7 +817,7 @@ main(int argc, char **argv)
 	 * incremental update of tag files.
 	 */
 	if (uflag) {
-		STRBUF	*sb = strbuf_pool_assign(0);
+		STRBUF	*sb = strbuf_open(0);
 		char *gtags_path = usable("gtags");
 
 		if (!gtags_path)
@@ -851,7 +850,7 @@ main(int argc, char **argv)
 		strbuf_puts(sb, quote_shell(dbpath));
 		if (system(strbuf_value(sb)))
 			exit(1);
-		strbuf_pool_release(sb);
+		strbuf_close(sb);
 		exit(0);
 	}
 	/*
@@ -886,7 +885,7 @@ main(int argc, char **argv)
 	 * local prefix must starts with './' and ends with '/'.
 	 */
 	if (Sflag) {
-		STRBUF *sb = strbuf_pool_assign(0);
+		STRBUF *sb = strbuf_open(0);
 		static char buf[MAXPATHLEN];
 		const char *path = scope;
 	
@@ -914,7 +913,7 @@ main(int argc, char **argv)
 		}
 		strbuf_putc(sb, '/');
 		localprefix = check_strdup(strbuf_value(sb));
-		strbuf_pool_release(sb);
+		strbuf_close(sb);
 #ifdef DEBUG
 		fprintf(stderr, "root=%s\n", root);
 		fprintf(stderr, "cwd=%s\n", cwd);
@@ -1006,7 +1005,7 @@ main(int argc, char **argv)
 	else {
 		tagsearch(av, cwd, root, dbpath, db);
 	}
-	strbuf_pool_close();
+	static_strbuf_free();
 	return 0;
 }
 /**
@@ -1059,7 +1058,7 @@ completion(const char *dbpath, const char *root, const char *prefix, int db)
 	 * search in library path.
 	 */
 	if (db == GTAGS && getenv("GTAGSLIBPATH") && (count == 0 || Tflag) && !Sflag) {
-		STRBUF *sb = strbuf_pool_assign(0);
+		STRBUF *sb = strbuf_open(0);
 		char *libdir, *nextp = NULL;
 
 		strbuf_puts(sb, getenv("GTAGSLIBPATH"));
@@ -1084,7 +1083,7 @@ completion(const char *dbpath, const char *root, const char *prefix, int db)
 			if (count > 0 && !Tflag)
 				break;
 		}
-		strbuf_pool_release(sb);
+		strbuf_close(sb);
 	}
 	/* return total; */
 }
@@ -1099,7 +1098,7 @@ void
 completion_idutils(const char *dbpath, const char *root, const char *prefix)
 {
 	FILE *ip;
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 	char *lid = usable("lid");
 	char *line, *p;
 	char *argv[10];
@@ -1186,7 +1185,7 @@ completion_idutils(const char *dbpath, const char *root, const char *prefix)
 	if (secure_pclose(ip) != 0)
 		die("terminated abnormally (errno = %d).", errno);
 #endif
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 }
 /**
  * completion_path: print candidate path list.
@@ -1306,7 +1305,7 @@ idutils(const char *pattern, const char *dbpath)
 {
 	FILE *ip;
 	CONVERT *cv;
-	STRBUF *ib = strbuf_pool_assign(0);
+	STRBUF *ib = strbuf_open(0);
 	char encoded_pattern[IDENTLEN];
 	char path[MAXPATHLEN];
 	char *lid = usable("lid");
@@ -1446,7 +1445,7 @@ idutils(const char *pattern, const char *dbpath)
 		die("terminated abnormally (errno = %d).", errno);
 #endif
 	convert_close(cv);
-	strbuf_pool_release(ib);
+	strbuf_close(ib);
 	if (vflag) {
 		print_count(count);
 		fprintf(stderr, " (using idutils index in '%s').\n", dbpath);
@@ -1465,7 +1464,7 @@ grep(const char *pattern, char *const *argv, const char *dbpath)
 	FILE *fp;
 	CONVERT *cv;
 	GFIND *gp = NULL;
-	STRBUF *ib = strbuf_pool_assign(MAXBUFLEN);
+	STRBUF *ib = strbuf_open(MAXBUFLEN);
 	const char *path;
 	char encoded_pattern[IDENTLEN];
 	const char *buffer;
@@ -1573,7 +1572,7 @@ grep(const char *pattern, char *const *argv, const char *dbpath)
 	}
 	args_close();
 	convert_close(cv);
-	strbuf_pool_release(ib);
+	strbuf_close(ib);
 	if (literal == 0)
 		regfree(&preg);
 	if (vflag) {
@@ -1750,7 +1749,7 @@ parsefile(char *const *argv, const char *cwd, const char *root, const char *dbpa
 {
 	int count = 0;
 	int flags = 0;
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 	char *langmap;
 	const char *plugin_parser, *av;
 	struct parsefile_data data;
@@ -1853,7 +1852,7 @@ parsefile(char *const *argv, const char *cwd, const char *root, const char *dbpa
 		dbop_close(data.dbop);
 	gpath_close();
 	convert_close(data.cv);
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 	if (vflag) {
 		print_count(count);
 		fprintf(stderr, " (no index used).\n");
@@ -1952,7 +1951,7 @@ tagsearch(const char *pattern, const char *cwd, const char *root, const char *db
 	if (abslib)
 		type = PATH_ABSOLUTE;
 	if (db == GTAGS && getenv("GTAGSLIBPATH") && (count == 0 || Tflag) && !Sflag) {
-		STRBUF *sb = strbuf_pool_assign(0);
+		STRBUF *sb = strbuf_open(0);
 		char *libdir, *nextp = NULL;
 
 		strbuf_puts(sb, getenv("GTAGSLIBPATH"));
@@ -1980,7 +1979,7 @@ tagsearch(const char *pattern, const char *cwd, const char *root, const char *db
 				break;
 			}
 		}
-		strbuf_pool_release(sb);
+		strbuf_close(sb);
 	}
 	if (vflag) {
 		print_count(total);

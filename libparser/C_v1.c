@@ -124,13 +124,15 @@ C(const struct parser_param *param)
 static void
 C_family(const struct parser_param *param, int type)
 {
+	static STRBUF *sb = NULL;
 	int c, cc;
 	int savelevel;
 	int startmacro, startsharp;
 	const char *interested = "{}=;";
-	STRBUF *sb = strbuf_pool_assign(0);
 	struct _lang_local _local = {0};
 	struct _lang_local *local = &_local;
+	if(!sb)
+		sb = static_strbuf_open(0);
 	/*
 	 * yacc file format is like the following.
 	 *
@@ -518,7 +520,6 @@ C_family(const struct parser_param *param, int type)
 		if (local->piflevel != 0)
 			warning("unmatched #if block. (last at level %d.)[+%d %s]", local->piflevel, T->lineno, T->gpath->path);
 	}
-	strbuf_pool_release(sb);
 	/* close current tokenizer */
 	tokenizer_close(T);
 	T = NULL;

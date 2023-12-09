@@ -138,12 +138,12 @@ printconf(const char *name)
 	else if (getconfb(name))
 		fprintf(stdout, "1\n");
 	else {
-		STRBUF *sb = strbuf_pool_assign(0);
+		STRBUF *sb = strbuf_open(0);
 		if (getconfs(name, sb))
 			fprintf(stdout, "%s\n", strbuf_value(sb));
 		else
 			exist = 0;
-		strbuf_pool_release(sb);
+		strbuf_close(sb);
 	}
 	return exist;
 }
@@ -209,7 +209,7 @@ static const char *gtags_parser;		/**< gtags_parser */
 static void
 configuration()
 {
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 
 	if (getconfb("extractmethod"))
 		extractmethod = 1;
@@ -219,7 +219,7 @@ configuration()
 	strbuf_reset(sb);
 	if (getconfs("gtags_parser", sb))
 		gtags_parser = check_strdup(strbuf_value(sb));
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 }
 int
 main(int argc, char **argv)
@@ -229,8 +229,7 @@ main(int argc, char **argv)
 	int optchar;
 	int option_index = 0;
 	STATISTICS_TIME *tim;
-	strbuf_pool_init(1024); /* create strbuf pool for later use */
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 
 	/*
 	 * pick up --gtagsconf, --gtagslabel and --directory (-C).
@@ -642,9 +641,9 @@ main(int argc, char **argv)
 	if (vflag)
 		fprintf(stderr, "[%s] Done.\n", now());
 	closeconf();
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 	print_statistics(statistics);
-	strbuf_pool_close(); /* close strbuf pool */
+	static_strbuf_free();
 	return 0;
 }
 /**
@@ -659,9 +658,9 @@ incremental(const char *dbpath, const char *root)
 {
 	STATISTICS_TIME *tim;
 	struct stat statp;
-	STRBUF *addlist = strbuf_pool_assign(0);
-	STRBUF *deletelist = strbuf_pool_assign(0);
-	STRBUF *addlist_other = strbuf_pool_assign(0);
+	STRBUF *addlist = strbuf_open(0);
+	STRBUF *deletelist = strbuf_open(0);
+	STRBUF *addlist_other = strbuf_open(0);
 	IDSET *deleteset, *findset;
 	int updated = 0;
 	const char *path;
@@ -836,9 +835,9 @@ exit:
 			fprintf(stderr, " Global databases are up to date.\n");
 		fprintf(stderr, "[%s] Done.\n", now());
 	}
-	strbuf_pool_release(addlist);
-	strbuf_pool_release(deletelist);
-	strbuf_pool_release(addlist_other);
+	strbuf_close(addlist);
+	strbuf_close(deletelist);
+	strbuf_close(addlist_other);
 	gpath_close();
 	idset_close(deleteset);
 	idset_close(findset);
@@ -952,7 +951,7 @@ void
 createtags(const char *dbpath, const char *root)
 {
 	STATISTICS_TIME *tim;
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 	int openflags;
 	struct gtags_path_proc_data proc_data;
 	/* init gtags private data */
@@ -1017,5 +1016,5 @@ createtags(const char *dbpath, const char *root)
 			fprintf(stderr, "GRTAGS_extra command failed: %s\n", strbuf_value(sb));
 		statistics_time_end(tim);
 	}
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 }

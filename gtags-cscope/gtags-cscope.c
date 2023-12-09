@@ -149,7 +149,6 @@ main(int argc, char **argv)
 #if defined(KEY_RESIZE) && defined(SIGWINCH)
     struct sigaction winch_action;
 #endif
-	strbuf_pool_init(1024);
     /* save the command name for messages */
     argv0 = argv[0];
 
@@ -404,13 +403,13 @@ cscope: Could not create private temp dir %s\n",
 
     /* if the cross-reference is to be considered up-to-date */
     if (isuptodate == YES) {
-	STRBUF  *sb = strbuf_pool_assign(0);
+	STRBUF  *sb = strbuf_open(0);
 	strbuf_sprintf(sb, "%s -p >" NULL_DEVICE, quote_shell(global_command));
 	if (system(strbuf_value(sb)) != 0) {
 	    postfatal("gtags-cscope: GTAGS not found. Please invoke again without -d option.\n");
             /* NOTREACHED */
 	}
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
     } else {
 	if (linemode == NO || verbosemode == YES)    /* display if verbose as well */
 	    postmsg("Building cross-reference...");                 
@@ -541,7 +540,7 @@ cscope: Could not create private temp dir %s\n",
     }
     /* cleanup and exit */
     myexit(0);
-	strbuf_pool_close();
+	static_strbuf_free();
     /* NOTREACHED */
     return 0;		/* avoid warning... */
 }

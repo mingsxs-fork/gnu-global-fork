@@ -80,7 +80,7 @@ Cpp(const struct parser_param *param)
 		int level;
 	} stack[MAXCLASSSTACK];
 	const char *interested = "{}=;~";
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 
 	*classname = *completename = 0;
 	stack[0].classname = completename;
@@ -598,7 +598,7 @@ Cpp(const struct parser_param *param)
 		}
 	}
 finish:
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 	if (param->flags & PARSER_WARNING) {
 		if (level != 0)
 			warning("unmatched {} block. (last at level %d.)[+%d %s]", level, lineno, curfile);

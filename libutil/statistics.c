@@ -115,7 +115,7 @@ struct statistics_time {
 	char name[1];
 };
 
-static STRBUF *sb;
+static STRBUF *sb = NULL;
 static STATISTICS_TIME *T_all;
 static STAILQ_HEAD(statistics_time_list, statistics_time)
 	statistics_time_list = STAILQ_HEAD_INITIALIZER(statistics_time_list);
@@ -124,7 +124,7 @@ void
 init_statistics(void)
 {
 	assert(sb == NULL);
-	sb = strbuf_pool_assign(0);
+	sb = static_strbuf_open(0);
 	T_all = statistics_time_start("The entire time");
 }
 
@@ -459,8 +459,6 @@ print_statistics(int style_no)
 	if (style->print_footer != NULL)
 		style->print_footer(priv);
 
-	strbuf_pool_release(sb);
 	T_all = NULL;
-	sb = NULL;
 }
 

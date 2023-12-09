@@ -463,7 +463,7 @@ gtags_open(const char *dbpath, const char *root, int db, int mode, int flags)
 			die("GPATH not found.");
 	}
 	if (gtop->mode != GTAGS_READ)
-		gtop->sb = strbuf_pool_assign(0);	/* This buffer is used for working area. */
+		gtop->sb = strbuf_open(0);	/* This buffer is used for working area. */
 	/*
 	 * Stuff for compact format.
 	 */
@@ -473,7 +473,7 @@ gtags_open(const char *dbpath, const char *root, int db, int mode, int flags)
 		if (gtop->mode != GTAGS_READ)
 			gtop->path_hash = strhash_open(HASHBUCKETS);
 	}
-	gtop->sb_compress = strbuf_pool_assign(0);
+	gtop->sb_compress = strbuf_open(0);
 	return gtop;
 }
 /**
@@ -682,7 +682,7 @@ gtags_delete(GTOP *gtop, IDSET *deleteset)
 
 #ifdef USE_SQLITE3
 	if (gtop->dbop->openflags & DBOP_SQLITE3) {
-		STRBUF *where = strbuf_pool_assign(0);
+		STRBUF *where = strbuf_open(0);
 		long id;
 		strbuf_puts(where, "(");
 		for (id = idset_first(deleteset); id != END_OF_ID; id = idset_next(deleteset)) {
@@ -693,7 +693,7 @@ gtags_delete(GTOP *gtop, IDSET *deleteset)
 		strbuf_unputc(where, ',');
 		strbuf_puts(where, ")");
 		dbop_delete(gtop->dbop, strbuf_value(where));
-		strbuf_pool_release(where);
+		strbuf_close(where);
 	} else
 #endif
 	for (tagline = dbop_first(gtop->dbop, NULL, NULL, 0); tagline; tagline = dbop_next(gtop->dbop)) {
@@ -1094,9 +1094,9 @@ gtags_close(GTOP *gtop)
 	if (gtop->path_array)
 		free(gtop->path_array);
 	if (gtop->sb)
-		strbuf_pool_release(gtop->sb);
+		strbuf_close(gtop->sb);
 	if (gtop->sb_compress)
-		strbuf_pool_release(gtop->sb_compress);
+		strbuf_close(gtop->sb_compress);
 	if (gtop->vb)
 		varray_close(gtop->vb);
 	if (gtop->path_hash)

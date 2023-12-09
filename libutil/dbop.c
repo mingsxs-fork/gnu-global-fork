@@ -807,13 +807,17 @@ dbop_putversion(DBOP *dbop, int version)
 void
 dbop_close(DBOP *dbop)
 {
+	static STRBUF *sb = NULL;
 	DB *db = dbop->db;
 
 	/*
 	 * Load sorted tag records and write them to the tag file.
 	 */
 	if (dbop->sortout != NULL) {
-		STRBUF *sb = strbuf_pool_assign(256);
+		if (sb)
+			strbuf_reset(sb);
+		else
+			sb = static_strbuf_open(256);
 		char *p;
 
 		/*
@@ -837,7 +841,6 @@ dbop_close(DBOP *dbop)
 			dbop_put(dbop, strbuf_value(sb), p);
 		}
 		fclose(dbop->sortin);
-		strbuf_pool_release(sb);
 		terminate_sort_process(dbop);
 	}
 #ifdef USE_SQLITE3
@@ -944,7 +947,7 @@ dbop3_open(const char *path, int mode, int perm, int flags) {
 		die("sqlite3_open_v2 failed. (rc = %d)", rc);
 	dbop = (DBOP *)check_calloc(sizeof(DBOP), 1);
 	strlimcpy(dbop->dbname, path, sizeof(dbop->dbname));
-	dbop->sb        = strbuf_pool_assign(0);
+	dbop->sb        = strbuf_open(0);
 	dbop->db3       = db3;
 	dbop->openflags	= flags;
 	dbop->perm	= (mode == 1) ? perm : 0;
@@ -1401,7 +1404,7 @@ dbop3_close(DBOP *dbop) {
 	if (dbop->tblname)
 		free((void *)dbop->tblname);
 	if (dbop->sb)
-		strbuf_pool_release(dbop->sb);
+		strbuf_close(dbop->sb);
 	free(dbop);
 }
 #endif /* USE_SQLITE3 */

@@ -184,7 +184,7 @@ static FILE *
 execute_command(XARGS *xp)
 {
 	int limit;
-	STRBUF *comline = strbuf_pool_assign(0);
+	STRBUF *comline = strbuf_open(0);
 	int count = 0;
 	int length;
 	FILE *pipe = NULL;
@@ -260,7 +260,7 @@ execute_command(XARGS *xp)
 		if (pipe == NULL)
 			die("cannot execute command '%s'.", strbuf_value(comline));
 	}
-	strbuf_pool_release(comline);
+	strbuf_close(comline);
 	return pipe;
 }
 /**
@@ -279,7 +279,7 @@ xargs_open_generic(const char *command, int max_args)
 	xp->command = check_strdup(command);
 	xp->type = 0;
 	xp->pipe = NULL;
-	xp->result = strbuf_pool_assign(0);
+	xp->result = strbuf_open(0);
 	xp->end_of_arg = 0;
 	xp->unread = 0;
 	xp->max_args = max_args;
@@ -330,7 +330,7 @@ xargs_open_with_file(const char *command, int max_args, FILE *ip)
 
 	xp->type = XARGS_FILE;
 	xp->ip = ip;
-	xp->path = strbuf_pool_assign(0);
+	xp->path = strbuf_open(0);
 	xp->fptr = 0;
 	return xp;
 }
@@ -467,11 +467,11 @@ xargs_close(XARGS *xp)
 	count = xp->seqno;
 	assert(xp->pipe == NULL);
 	free(xp->command);
-	strbuf_pool_release(xp->result);
+	strbuf_close(xp->result);
 
 	switch (xp->type) {
 	case XARGS_FILE:
-		strbuf_pool_release(xp->path);
+		strbuf_close(xp->path);
 		break;
 	case XARGS_ARGV:
 	case XARGS_STRBUF:

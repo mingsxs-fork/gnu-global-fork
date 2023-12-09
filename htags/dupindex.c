@@ -51,9 +51,9 @@ static const char *options[] = {NULL, "",           "r",         "s"};
 int
 makedupindex(void)
 {
-	STRBUF *sb = strbuf_pool_assign(0);
-	STRBUF *tmp = strbuf_pool_assign(0);
-	STRBUF *command = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
+	STRBUF *tmp = strbuf_open(0);
+	STRBUF *command = strbuf_open(0);
 	int definition_count = 0;
 	char srcdir[MAXPATHLEN];
 	int db;
@@ -207,8 +207,8 @@ makedupindex(void)
 			cache_put(db, prev, strbuf_value(tmp), strbuf_getlen(tmp) + 1);
 		}
 	}
-	strbuf_pool_release(sb);
-	strbuf_pool_release(tmp);
-	strbuf_pool_release(command);
+	strbuf_close(sb);
+	strbuf_close(tmp);
+	strbuf_close(command);
 	return definition_count;
 }

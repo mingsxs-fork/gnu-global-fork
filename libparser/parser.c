@@ -75,8 +75,8 @@ static void
 load_notfunction(const char *filename)
 {
 	FILE *ip;
-	STRBUF *sb = strbuf_pool_assign(0);
-	STRBUF *ib = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
+	STRBUF *ib = strbuf_open(0);
 	char *p;
 	int i;
 
@@ -99,8 +99,8 @@ load_notfunction(const char *filename)
 		p += strlen(p) + 1;
 	}
 	qsort(words, tablesize, sizeof(struct words), cmp);
-	strbuf_pool_release(sb);
-	strbuf_pool_release(ib);
+	strbuf_close(sb);
+	strbuf_close(ib);
 }
 
 static int

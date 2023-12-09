@@ -50,7 +50,6 @@
 #define empty_stack(vs)	(!vs || vs->stack_top < 0)
 
 static VSTACK *tokenizer_stack = NULL;  /* tokenizer stack */
-
 TOKENIZER *CURRENT;  /* current tokenizer */
 
 /* when we call those default tokenizer ops functions,
@@ -88,7 +87,10 @@ int opened_tokenizers (void)
 TOKENIZER *
 tokenizer_open (const struct gtags_path *gpath, struct tokenizer_ops *ops, void *lang_data)
 {
+	static STRBUF *sb = NULL;
 	TOKENIZER *t;
+	if (unlikely(!sb))
+		sb = static_strbuf_open(MAXBUFLEN);
 	if (!tokenizer_stack)
 		tokenizer_stack = vstack_open(sizeof(struct tokenizer), STACK_EXPAND);
 	t = vstack_push(tokenizer_stack); /* allocate new tokenizer on stack */
@@ -101,7 +103,7 @@ tokenizer_open (const struct gtags_path *gpath, struct tokenizer_ops *ops, void 
 	t->lang_priv = lang_data; /* lang private data */
 	if ((t->ip = fopen(t->gpath->path, "rb")) == NULL)
 		goto failed;
-	t->ib = strbuf_pool_assign(MAXBUFLEN);
+	t->ib = sb;
 	CURRENT = t; /* update CURRENT */
 	return t;
 
@@ -119,7 +121,7 @@ tokenizer_close (TOKENIZER *t)
 	if (t && t == CURRENT) {
 		t = vstack_pop(tokenizer_stack);
 		if (t->ib) {
-			strbuf_pool_release(t->ib);
+			strbuf_reset(t->ib);
 		}
 		if (t->ip) {
 			fclose(t->ip);

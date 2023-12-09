@@ -76,13 +76,13 @@ start_output(int a_format, int a_nosource)
 	cur_lineno = last_lineno = 0;
 	fp = NULL;
 	src = "";
-	sb_uncompress = strbuf_pool_assign(0);
+	sb_uncompress = strbuf_open(0);
 }
 void
 end_output(void)
 {
 	if (sb_uncompress)
-		strbuf_pool_release(sb_uncompress);
+		strbuf_close(sb_uncompress);
 	if (fp)
 		fclose(fp);
 }

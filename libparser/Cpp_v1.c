@@ -73,6 +73,7 @@ static TOKENIZER *T = NULL; /* current tokenizer */
 void
 Cpp(const struct parser_param *param)
 {
+	static STRBUF *sb = NULL;
 	int c, cc;
 	int savelevel;
 	int startclass, startthrow, startmacro, startsharp, startequal;
@@ -88,7 +89,8 @@ Cpp(const struct parser_param *param)
 	const char *interested = "{}=;~";
 	struct _lang_local _local = {0};
 	struct _lang_local *local = &_local;
-	STRBUF *sb = strbuf_pool_assign(0);
+	if (!sb)
+		sb = static_strbuf_open(0);
 
 	*classname = *completename = 0;
 	stack[0].classname = completename;
@@ -612,7 +614,6 @@ finish:
 		if (local->piflevel != 0)
 			warning("unmatched #if block. (last at level %d.)[+%d %s]", local->piflevel, T->lineno, T->gpath->path);
 	}
-	strbuf_pool_release(sb);
 	/* close current tokenizer */
 	tokenizer_close(T);
 	T = NULL;

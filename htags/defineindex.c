@@ -53,8 +53,8 @@ makedefineindex(const char *file, int total, STRBUF *defines)
 	FILEOP *fileop_MAP = NULL, *fileop_DEFINES, *fileop_ALPHA = NULL;
 	FILE *MAP = NULL;
 	FILE *DEFINES, *STDOUT, *TAGS, *ALPHA = NULL;
-	STRBUF *sb = strbuf_pool_assign(0);
-	STRBUF *url = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
+	STRBUF *url = strbuf_open(0);
 	/* Index link */
 	const char *target = (Fflag) ? "mains" : "_top";
 	const char *indexlink;
@@ -287,7 +287,7 @@ makedefineindex(const char *file, int total, STRBUF *defines)
 	html_count++;
 	if (map_file)
 		close_file(fileop_MAP);
-	strbuf_pool_release(sb);
-	strbuf_pool_release(url);
+	strbuf_close(sb);
+	strbuf_close(url);
 	return count;
 }

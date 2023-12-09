@@ -182,6 +182,7 @@ readrecord(FILE *fp, const char *label)
 static void
 includelabel(FILE *fp, STRBUF *sb, const char *label, int level)
 {
+	static STRBUF *inc = NULL;
 	const char *savep, *p, *q;
 	char *file;
 
@@ -202,7 +203,10 @@ includelabel(FILE *fp, STRBUF *sb, const char *label, int level)
 	if (!(savep = p = readrecord(fp, label)))
 		die("label '%s' not found in '%s'.", label, config_path);
 	while ((q = locatestring(p, ":include=", MATCH_FIRST)) || (q = locatestring(p, ":tc=", MATCH_FIRST))) {
-		STRBUF *inc = strbuf_pool_assign(0);
+		if (inc)
+			strbuf_reset(inc);
+		else
+			inc = static_strbuf_open(0);
 
 		strbuf_nputs(sb, p, q - p);
 		q = locatestring(q, "=", MATCH_FIRST) + 1;
@@ -210,7 +214,6 @@ includelabel(FILE *fp, STRBUF *sb, const char *label, int level)
 			strbuf_putc(inc, *q);
 		includelabel(fp, sb, strbuf_value(inc), level);
 		p = q;
-		strbuf_pool_release(inc);
 	}
 	strbuf_puts(sb, p);
 	free((void *)savep);
@@ -319,18 +322,18 @@ openconf(const char *rootdir)
 	
 		if (!(fp = fopen(config_path, "r")))
 			die("cannot open '%s'.", config_path);
-		ib = strbuf_pool_assign(MAXBUFLEN);
-		sb = strbuf_pool_assign(0);
+		ib = strbuf_open(MAXBUFLEN);
+		sb = strbuf_open(0);
 		includelabel(fp, sb, config_label, 0);
 		confline = check_strdup(strbuf_value(sb));
-		strbuf_pool_release(ib);
-		strbuf_pool_release(sb);
+		strbuf_close(ib);
+		strbuf_close(sb);
 		fclose(fp);
 	}
 	/*
 	 * make up required variables.
 	 */
-	sb = strbuf_pool_assign(0);
+	sb = strbuf_open(0);
 	strbuf_puts(sb, confline);
 	strbuf_unputc(sb, ':');
 
@@ -345,7 +348,7 @@ openconf(const char *rootdir)
 	strbuf_unputc(sb, ':');
 	strbuf_putc(sb, ':');
 	confline = check_strdup(strbuf_value(sb));
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 	trim(confline);
 	return;
 }
@@ -382,9 +385,17 @@ int recursive_call = 0;
 static void
 replace_variables(STRBUF *sb)
 {
-	STRBUF *result = strbuf_pool_assign(0);
-	STRBUF *word = strbuf_pool_assign(0);
+	static STRBUF *result = NULL;
+	static STRBUF *word = NULL;
 	const char *p = strbuf_value(sb);
+	if (result)
+		strbuf_reset(result);
+	else
+		result = static_strbuf_open(0);
+	if (word)
+		strbuf_reset(word);
+	else
+		word = static_strbuf_open(0);
 
 	/*
 	 * Simple of detecting infinite loop.
@@ -420,8 +431,6 @@ replace_variables(STRBUF *sb)
 	}
 	strbuf_reset(sb);
 	strbuf_puts(sb, strbuf_value(result));
-	strbuf_pool_release(result);
-	strbuf_pool_release(word);
 	recursive_call--;
 }
 /**
@@ -434,7 +443,7 @@ replace_variables(STRBUF *sb)
 int
 getconfs(const char *name, STRBUF *result)
 {
-	STRBUF *sb = NULL;
+	static STRBUF *sb = NULL;
 	const char *p;
 	char buf[MAXPROPLEN];
 	int all = 0;
@@ -449,7 +458,10 @@ getconfs(const char *name, STRBUF *result)
 			strbuf_puts(result, config_path);
 		return 1;
 	}
-	sb = strbuf_pool_assign(0);
+	if (sb)
+		strbuf_reset(sb);
+	else
+		sb = static_strbuf_open(0);
 	if (!strcmp(name, "skip") || !strcmp(name, "gtags_parser") || !strcmp(name, "langmap"))
 		all = 1;
 	snprintf(buf, sizeof(buf), ":%s=", name);
@@ -525,7 +537,6 @@ getconfs(const char *name, STRBUF *result)
 		strbuf_puts(result, !strcmp(name, "langmap") ? 
 			trim_langmap(strbuf_value(sb)) :
 			strbuf_value(sb));
-	strbuf_pool_release(sb);
 	return exist;
 }
 /**

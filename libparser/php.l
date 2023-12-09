@@ -62,7 +62,7 @@
 
 static void debug_print(const char *, ...);
 static int level;			/* block nest level */
-static STRBUF *string;			/* string */
+static STRBUF *string = NULL;			/* string */
 static char end_of_here_document[IDENTLEN];
 static int pre_here_document;
 
@@ -289,7 +289,10 @@ php(const struct parser_param *param)
 	int token;
 
 	level = 0;
-	string = strbuf_pool_assign(0);
+	if (string)
+		strbuf_reset(string);
+	else
+		string = static_strbuf_open(0);
 	if (linetable_open(param->gpath->path) == -1)
 		die("'%s' cannot open.", param->gpath->path);
 
@@ -363,5 +366,4 @@ php(const struct parser_param *param)
 		}
 	}
 	linetable_close();
-	strbuf_pool_release(string);
 }

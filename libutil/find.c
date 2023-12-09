@@ -158,7 +158,7 @@ static regex_t *
 prepare_source(void)
 {
 	static regex_t suff_area;
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 	char *default_langmap = DEFAULTLANGMAP;
 	char *langmap = default_langmap;
 	char *p;
@@ -236,7 +236,7 @@ prepare_source(void)
 		fprintf(stderr, "prepare_source: %s\n", strbuf_value(sb));
 	if (regcomp(&suff_area, strbuf_value(sb), flags) != 0)
 		die("cannot compile regular expression.");
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 	if (langmap != default_langmap)
 		free(langmap);
 	return &suff_area;
@@ -255,7 +255,7 @@ prepare_skip(void)
 {
 	static regex_t skip_area;
 	char *skiplist;
-	STRBUF *reg = strbuf_pool_assign(0);
+	STRBUF *reg = strbuf_open(0);
 	char *p, *q;
 	int flags = REG_EXTENDED|REG_NEWLINE;
 
@@ -271,7 +271,7 @@ prepare_skip(void)
 	 * load skip data.
 	 */
 	if (!getconfs("skip", reg)) {
-		strbuf_pool_release(reg);
+		strbuf_close(reg);
 		return NULL;
 	}
 	skiplist = check_strdup(strbuf_value(reg));
@@ -393,7 +393,7 @@ prepare_skip(void)
 		fprintf(stderr, "DBG: Regular expression of the skip list:\n%s\n", strbuf_value(reg));
 	if (regcomp(&skip_area, strbuf_value(reg), flags) != 0)
 		die("cannot compile regular expression.");
-	strbuf_pool_release(reg);
+	strbuf_close(reg);
 	free(skiplist);
 
 	return &skip_area;
@@ -722,7 +722,7 @@ find_open(const char *start, int explain)
 	curp = vstack_push(vstack);
 	strlimcpy(dir, start, sizeof(dir));
 	curp->dirp = dir + strlen(dir);
-	curp->sb = strbuf_pool_assign(0);
+	curp->sb = strbuf_open(0);
 	curp->real = getrealpath(dir);
 	if (getdirs(dir, curp->sb) < 0)
 		die("Work is given up.");
@@ -930,12 +930,12 @@ find_read_traverse(void)
 				return val;
 			}
 			if (type == 'd') {
-				STRBUF *sb = strbuf_pool_assign(0);
+				STRBUF *sb = strbuf_open(0);
 				char *dirp = curp->dirp;
 				strcat(dirp, unit);
 				strcat(dirp, "/");
 				if (getdirs(dir, sb) < 0) {
-					strbuf_pool_release(sb);
+					strbuf_close(sb);
 					*(curp->dirp) = 0;
 					continue;
 				}
@@ -950,7 +950,7 @@ find_read_traverse(void)
 				curp->end   = curp->start + strbuf_getlen(sb);
 			}
 		}
-		strbuf_pool_release(curp->sb);
+		strbuf_close(curp->sb);
 		curp->sb = NULL;
 		free(curp->real);
 		curp->real = NULL;

@@ -55,7 +55,7 @@ set_env(const char *var, const char *val)
  * sparc-sun-solaris2.6 doesn't have setenv(3).
  */
 #ifdef HAVE_PUTENV
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 
 	strbuf_sprintf(sb, "%s=%s", var, val);
 	putenv(strbuf_value(sb));
@@ -123,7 +123,7 @@ void
 setenv_from_config(void)
 {
 	int i, lim = sizeof(envname) / sizeof(char *);
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 
 	for (i = 0; i < lim; i++) {
 		if (getenv(envname[i]) == NULL) {
@@ -143,5 +143,5 @@ setenv_from_config(void)
 		if (getconfs("htags_options", sb))
 			set_env("HTAGS_OPTIONS", strbuf_value(sb));
 	}
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 }

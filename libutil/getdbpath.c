@@ -307,7 +307,7 @@ setupdbpath(int verbose)
 					fprintf(stderr, "'%s' ignored because it cannot be opened.\n", path);
 				break;
 			}
-			sb = strbuf_pool_assign(0);
+			sb = strbuf_open(0);
 			s = strbuf_fgets(sb, fp, STRBUF_NOCRLF);
 			if (s == NULL) {
 				/* Empty file? */
@@ -329,7 +329,7 @@ setupdbpath(int verbose)
 			}
 ignore_lab:;
 			fclose(fp);
-			strbuf_pool_release(sb);
+			strbuf_close(sb);
 			break;
 		} while (0);
 	}

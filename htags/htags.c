@@ -420,14 +420,14 @@ make_directory_in_distpath(const char *name)
 void
 loadfile(const char *file, STRBUF *result)
 {
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 	FILE *ip = fopen(file, "r");
 	if (!ip)
 		die("file '%s' not found.", file);
 	while (strbuf_fgets(sb, ip, STRBUF_NOCRLF) != NULL)
 		strbuf_puts_nl(result, strbuf_value(sb));
 	fclose(ip);
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 }
 /**
  * makeprogram: make CGI program
@@ -784,8 +784,8 @@ static char *
 makecommonpart(const char *title, const char *defines, const char *files)
 {
 	FILE *ip;
-	STRBUF *sb = strbuf_pool_assign(0);
-	STRBUF *ib = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
+	STRBUF *ib = strbuf_open(0);
 	char buf[MAXFILLEN];
 	const char *tips = "Go to the GLOBAL project page.";
 	const char *_, *item;
@@ -931,7 +931,7 @@ makecommonpart(const char *title, const char *defines, const char *files)
 			break;
 		}
 	}
-	strbuf_pool_release(ib);
+	strbuf_close(ib);
 
 	return strbuf_value(sb);
 	/* doesn't close string buffer */
@@ -967,7 +967,7 @@ basic_check(void)
 static void
 configuration(void)
 {
-	STRBUF *sb = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
 
 	/*
 	 * Config variables.
@@ -994,7 +994,7 @@ configuration(void)
 	strbuf_reset(sb);
 	if (getconfs("langmap", sb))
 		langmap = check_strdup(strbuf_value(sb));
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 }
 /**
  * save_environment: save configuration data and arguments.
@@ -1003,9 +1003,9 @@ static void
 save_environment(int argc, char *const *argv)
 {
 	char command[MAXFILLEN];
-	STRBUF *sb = strbuf_pool_assign(0);
-	STRBUF *save_c = strbuf_pool_assign(0);
-	STRBUF *save_a = strbuf_pool_assign(0);
+	STRBUF *sb = strbuf_open(0);
+	STRBUF *save_c = strbuf_open(0);
+	STRBUF *save_a = strbuf_open(0);
 	int i;
 	const char *p;
 	FILE *ip;
@@ -1030,10 +1030,10 @@ save_environment(int argc, char *const *argv)
 	}
 	if (pclose(ip) != 0)
 		die("terminated abnormally '%s' (errno = %d).", command, errno);
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 	save_config = strbuf_value(save_c);
 	/* doesn't close string buffer for save config. */
-	/* strbuf_pool_release(save_c); */
+	/* strbuf_close(save_c); */
 
 	/*
 	 * save arguments.
@@ -1064,7 +1064,7 @@ save_environment(int argc, char *const *argv)
 	}
 	save_argv = strbuf_value(save_a);
 	/* doesn't close string buffer for save arguments. */
-	/* strbuf_pool_release(save_a); */
+	/* strbuf_close(save_a); */
 }
 
 int
@@ -1078,7 +1078,6 @@ main(int argc, char **argv)
         int option_index = 0;
 	STATISTICS_TIME *tim;
 
-	strbuf_pool_init(1024);
 	/*
 	 * pick up --gtagsconf, --gtagslabel and --directory (-C).
 	 */
@@ -1320,7 +1319,7 @@ main(int argc, char **argv)
 	 * Invokes gtags beforehand.
 	 */
 	if (gflag) {
-		STRBUF *sb = strbuf_pool_assign(0);
+		STRBUF *sb = strbuf_open(0);
 
 		strbuf_puts(sb, gtags_path);
 		if (vflag)
@@ -1338,7 +1337,7 @@ main(int argc, char **argv)
 		}
 		if (system(strbuf_value(sb)))
 			die("cannot execute gtags(1) command.");
-		strbuf_pool_release(sb);
+		strbuf_close(sb);
 	}
 	/*
 	 * get dbpath.
@@ -1561,8 +1560,8 @@ main(int argc, char **argv)
 		makesearchindex("search.html");
 	}
 	{
-		STRBUF *defines = strbuf_pool_assign(0);
-		STRBUF *files = strbuf_pool_assign(0);
+		STRBUF *defines = strbuf_open(0);
+		STRBUF *files = strbuf_open(0);
 
 		/*
 		 * (5) make definition index (defines.html and defines/)
@@ -1612,8 +1611,8 @@ main(int argc, char **argv)
 		message("[%s] (#) making a common part ...", now());
 		index = makecommonpart(title, strbuf_value(defines), strbuf_value(files));
 
-		strbuf_pool_release(defines);
-		strbuf_pool_release(files);
+		strbuf_close(defines);
+		strbuf_close(files);
 	}
 	/*
 	 * (7)make index file (index.html)
@@ -1685,6 +1684,6 @@ main(int argc, char **argv)
 	 */
 	print_statistics(statistics);
 	clean();
-	strbuf_pool_close();
+	static_strbuf_free();
 	return 0;
 }

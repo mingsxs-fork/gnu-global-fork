@@ -1838,12 +1838,12 @@ assembly(const struct parser_param *param)
 	if (linetable_open(param->gpath->path) == -1)
 		die("'%s' cannot open.", param->gpath->path);
 
-	asm_symtable = strbuf_pool_assign(0);
+	asm_symtable = strbuf_open(0);
 	asm_initscan();
 
 	asm_parse(param);
 
-	strbuf_pool_release(asm_symtable);
+	strbuf_close(asm_symtable);
 	linetable_close();
 }
 

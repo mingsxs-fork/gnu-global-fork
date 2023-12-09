@@ -39,7 +39,7 @@
 int
 makecflowindex(const char *output, const char *cflow_file)
 {
-	STRBUF *input = strbuf_pool_assign(0);
+	STRBUF *input = strbuf_open(0);
 	FILE *ip, *op;
 	char *cflow_posix, *p;
 	const char *m0 = "Gave up making call-tree because of invalid POSIX cflow format.";
@@ -210,7 +210,7 @@ finish:
         fputs_nl(verbatim_end, op);
         fputs_nl(body_end, op);
         fputs_nl(gen_page_end(), op);
-	strbuf_pool_release(input);
+	strbuf_close(input);
 	fclose(ip);
 	fclose(op);
 	return status;

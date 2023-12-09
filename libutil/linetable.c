@@ -37,7 +37,7 @@
 
 /* File buffer */
 #define EXPAND 1024
-static STRBUF *ib;
+static STRBUF *ib = NULL;
 static char *filebuf;
 static int filesize;
 
@@ -65,7 +65,10 @@ linetable_open(const char *path)
 
 	if (stat(path, &sb) < 0)
 		return -1;
-	ib = strbuf_pool_assign(sb.st_size);
+	if (ib)
+		strbuf_reset(ib);
+	else
+		ib = static_strbuf_open(sb.st_size);
 	vb = varray_open(sizeof(int), EXPAND);
 	if ((ip = fopen(path, "r")) == NULL)
 		return -1;
@@ -81,7 +84,7 @@ linetable_open(const char *path)
 	curp = filebuf = strbuf_value(ib);
 	filesize = offset;
 	endp = filebuf + filesize;
-	/* strbuf_pool_release(ib); */
+	/* strbuf_close(ib); */
 
 	return 0;
 }
@@ -150,7 +153,6 @@ void
 linetable_close(void)
 {
 	varray_close(vb);
-	strbuf_pool_release(ib);
 }
 /**
  * linetable_print: print a line.

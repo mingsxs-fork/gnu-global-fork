@@ -265,7 +265,7 @@ walk_build_path_tree(VARRAY_LOC *loc, STRBUF *sb)
 void
 path_tree_build(const char *start)
 {
-	STRBUF *sb = strbuf_pool_assign(MAXPATHLEN);
+	STRBUF *sb = strbuf_open(MAXPATHLEN);
 	VARRAY *vb;
 	if (!start)
 		start = ".";  /* default root path */
@@ -295,7 +295,7 @@ path_tree_build(const char *start)
 	/* allocate memory for parse states */
 	if (!file_parse_states)
 		file_parse_states = check_calloc(sizeof(char), total_accepted_paths);
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 }
 
 void
@@ -505,10 +505,10 @@ find_proc_path_all(const char *start, PATH_PROC proc, void *data)
 		die("check root path failed: %s", trimpath(start));
 	if ((rootrealpath = realpath(start, NULL)) == NULL)
 		die("can't get real path of root path '%s'.", trimpath(start));
-	sb = strbuf_pool_assign(MAXPATHLEN);
+	sb = strbuf_open(MAXPATHLEN);
 	strbuf_puts(sb, start);
 	walk_find_proc_path(sb, proc, data);
-	strbuf_pool_release(sb);
+	strbuf_close(sb);
 	find_close();
 }
 
@@ -516,7 +516,7 @@ void
 find_proc_filelist(const char *filename, const char *root, PATH_PROC proc, void *data)
 {
 	static FILE *temp = NULL;
-	STRBUF *ib = strbuf_pool_assign(0);
+	STRBUF *ib = strbuf_open(0);
 	FILE *ip = NULL;
 	char buf[MAXPATHLEN + 2];
 	const char *path;
@@ -621,6 +621,6 @@ find_proc_filelist(const char *filename, const char *root, PATH_PROC proc, void 
 		(void)proc(path, data);
 	}
 	fclose(ip);
-	strbuf_pool_release(ib);
+	strbuf_close(ib);
 	find_close();
 }

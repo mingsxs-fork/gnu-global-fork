@@ -792,7 +792,7 @@ void
 makeincludeindex(void)
 {
 	FILE *PIPE;
-	STRBUF *input = strbuf_pool_assign(0);
+	STRBUF *input = strbuf_open(0);
 	char *ctags_x;
 	struct data *inc;
 	char *target = (Fflag) ? "mains" : "_top";
@@ -884,7 +884,7 @@ makeincludeindex(void)
 			 * inc->contents == NULL means that information already
 			 * written to file.
 			 */
-			strbuf_pool_release(inc->contents);
+			strbuf_close(inc->contents);
 			inc->contents = NULL;
 		}
 		if (!inc->ref_count)
@@ -926,9 +926,9 @@ makeincludeindex(void)
 			 * inc->ref_contents == NULL means that information already
 			 * written to file.
 			 */
-			strbuf_pool_release(inc->ref_contents);
+			strbuf_close(inc->ref_contents);
 			inc->ref_contents = NULL;
 		}
 	}
-	strbuf_pool_release(input);
+	strbuf_close(input);
 }
