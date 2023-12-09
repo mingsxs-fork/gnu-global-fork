@@ -1839,7 +1839,7 @@ assembly(const struct parser_param *param)
 		die("'%s' cannot open.", param->gpath->path);
 
 	if (asm_symtable)
-		strbuf_reset(asm_symtable)
+		strbuf_reset(asm_symtable);
 	else
 		asm_symtable = static_strbuf_open(0);
 	asm_initscan();
