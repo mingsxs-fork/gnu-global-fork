@@ -92,7 +92,7 @@ C_family(const struct parser_param *param, int type)
 	int savelevel;
 	int startmacro, startsharp;
 	const char *interested = "{}=;";
-	STRBUF *sb = strbuf_open(0);
+	STRBUF *sb = strbuf_pool_assign(0);
 	/*
 	 * yacc file format is like the following.
 	 *
@@ -475,7 +475,7 @@ C_family(const struct parser_param *param, int type)
 			break;
 		}
 	}
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 	if (param->flags & PARSER_WARNING) {
 		if (level != 0)
 			warning("unmatched {} block. (last at level %d.)[+%d %s]", level, lineno, curfile);

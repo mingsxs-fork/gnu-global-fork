@@ -35,10 +35,18 @@
 #include "checkalloc.h"
 #include "die.h"
 #include "strbuf.h"
+#include "varray.h"
+#include "likely.h"
 
 #ifndef isblank
 #define isblank(c)	((c) == ' ' || (c) == '\t')
 #endif
+
+#define STRBUF_POOL_EXPAND 32 /* to align with strbuf pool map */
+#define first_zero_bit(x)	(int)(__builtin_ffs(~(unsigned int)x) - 1)
+
+static STRBUF_POOL *sb_pool = NULL;
+
 /*
 
 String buffer: usage and memory status
@@ -95,6 +103,19 @@ __strbuf_expandbuf(STRBUF *sb, int length)
 	sb->sbuf = newbuf;
 
 	sb->curp = sb->sbuf + count;
+	sb->endp = sb->sbuf + sb->sbufsize;
+}
+void
+__strbuf_init(STRBUF *sb, int init)
+{
+	int initsize = (init > 0) ? init : INITIALSIZE;
+	if (sb->sbufsize == 0 || sb->sbufsize < initsize) {
+		sb->sbufsize = initsize;
+		if (sb->sbuf)
+			(void) free(sb->sbuf);
+		sb->sbuf = (char *)check_malloc(sb->sbufsize + 1);
+	}
+	sb->curp = sb->sbuf;
 	sb->endp = sb->sbuf + sb->sbufsize;
 }
 /**
@@ -567,4 +588,123 @@ strbuf_endswith(STRBUF *sb, const char *s)
 	const char *sp = s + strlen(s) - 1;
 	while (p >= sb->sbuf && sp >= s && *p-- == *sp--);
 	return sp == s ? 1 : 0;
+}
+
+void
+strbuf_pool_init (int limit)
+{
+	if (!sb_pool) {
+		sb_pool = check_malloc(sizeof(STRBUF_POOL));
+		sb_pool->limit = limit;
+		sb_pool->vb = varray_open(sizeof(STRBUF), STRBUF_POOL_EXPAND);
+		sb_pool->map = NULL;
+		sb_pool->mapsize = sb_pool->assigned = sb_pool->released = 0;
+	} else { /* reinit */
+		if ((sb_pool->assigned - sb_pool->released) > limit) {
+			warning ("beyond strbuf pool limit, original: %d, new: %d, ignored", sb_pool->limit, limit);
+			return ;
+		}
+		sb_pool->limit = limit; /* only update pool limit */
+	}
+}
+
+void
+strbuf_pool_close (void)
+{
+	int i;
+	STRBUF *sb;
+	if (!sb_pool)
+		return ;
+	/* free all strbuf internal buffers assigned */
+	for (i = 0; i < sb_pool->vb->length; i++) {
+		sb = varray_assign(sb_pool->vb, i, 0);
+		if (sb->name) {
+			(void)free(sb->name);
+			sb->name = NULL;
+		}
+		if (sb->sbuf) {
+			(void)free(sb->sbuf);
+			sb->sbuf = NULL;
+		}
+	}
+	varray_close(sb_pool->vb);
+	if (sb_pool->map)
+		free(sb_pool->map);
+	free(sb_pool);
+	sb_pool = NULL;
+}
+
+STRBUF *
+strbuf_pool_assign (int initsize)
+{
+	static int imapsave = 0;
+	STRBUF *unused = NULL;
+	register int imap, upper, k, index;
+	if (!sb_pool)
+		die("strbuf pool not initialized.");
+	if (sb_pool->assigned - sb_pool->released >= sb_pool->limit) {
+		warning("strbuf pool beyond limit: %d.", sb_pool->limit);
+		return NULL;
+	}
+	/* first lookup in the allocated block */
+	for (imap = imapsave, upper = sb_pool->mapsize; imap < upper; imap++) {
+		k = first_zero_bit(sb_pool->map[imap]);
+		if (k > -1) { /* found unused strbuf */
+			index = imap * STRBUF_POOL_EXPAND + k;
+			if (unlikely(index > sb_pool->vb->length))
+				die("strbuf pool internal error, index beyond length");
+			if (index < sb_pool->vb->length)
+				unused = varray_assign(sb_pool->vb, index, 0);
+			else {
+				unused = varray_append(sb_pool->vb); /* allocate new strbuf */
+				memset(unused, 0, sizeof(*unused));
+			}
+			break;
+		}
+		if (unlikely(imap == sb_pool->mapsize-1 && imapsave > 0)) {
+			upper = imapsave;
+			imap = -1; /* reset to loop the part before imapsave */
+		}
+	}
+	imapsave = (imap == sb_pool->mapsize ? 0 : imap); /* update imapsave */
+	if (unlikely(unused == NULL)) { /* need reallocate mapsize */
+		++sb_pool->mapsize;
+		if (sb_pool->map)
+			sb_pool->map = check_realloc(sb_pool->map, sb_pool->mapsize * sizeof(unsigned int));
+		else
+			sb_pool->map = check_malloc(sb_pool->mapsize * sizeof(unsigned int));
+		sb_pool->map[sb_pool->mapsize - 1] = 0;
+		unused = varray_append(sb_pool->vb);
+		memset(unused, 0, sizeof(*unused));
+		index = sb_pool->vb->length - 1; /* last varray item */
+	}
+	__strbuf_init(unused, initsize);
+	sb_pool->map[index / STRBUF_POOL_EXPAND] |= (1 << (index % STRBUF_POOL_EXPAND));
+	sb_pool->assigned ++;
+	return unused;
+}
+
+void
+strbuf_pool_release (STRBUF *sb)
+{
+	static int isave = 0;
+	int i, upper;
+	if (!sb_pool)
+		die("strbuf pool not initialized.");
+	for (i = isave, upper = sb_pool->vb->length; i < upper; i++) {
+		if (sb_pool->map[i / STRBUF_POOL_EXPAND] & (1 << (i % STRBUF_POOL_EXPAND)) == 0)
+			continue;
+		if (unlikely(sb == varray_assign(sb_pool->vb, i, 0))) {
+			/* reset strbuf */
+			strbuf_reset(sb);
+			sb_pool->map[i / STRBUF_POOL_EXPAND] &= ~(1 << (i % STRBUF_POOL_EXPAND));
+			sb_pool->released ++;
+			break;
+		}
+		if (unlikely(i == sb_pool->vb->length-1 && isave > 0)) {
+			upper = isave;
+			i = -1; /* reset to loop the part before isave */
+		}
+	}
+	isave = (i == sb_pool->vb->length ? 0 : i); /* update isave */
 }

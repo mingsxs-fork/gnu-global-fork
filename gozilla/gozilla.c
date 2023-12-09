@@ -113,7 +113,8 @@ main(int argc, char **argv)
 {
 	char c;
 	const char *p, *browser = NULL, *definition = NULL;
-	STRBUF *URL = strbuf_open(0);
+	strbuf_pool_init(1024);
+	STRBUF *URL = strbuf_pool_assign(0);
 
 	logging_arguments(argc, argv);
 	while (--argc > 0 && ((c = (++argv)[0][0]) == '-' || c == '+')) {
@@ -219,6 +220,7 @@ main(int argc, char **argv)
 	 * Show URL's page.
 	 */
 	show_page_by_url(browser, strbuf_value(URL));
+	strbuf_pool_close();
 	exit(0);
 }
 
@@ -236,7 +238,7 @@ getdefinitionURL(const char *arg, const char *htmldir, STRBUF *URL)
 	char *p;
 	SPLIT ptable;
 	int status = -1;
-	STRBUF *sb = strbuf_open(0);
+	STRBUF *sb = strbuf_pool_assign(0);
 	const char *path = makepath(htmldir, "D", NULL);
 
 	if (!test("d", path))
@@ -264,7 +266,7 @@ getdefinitionURL(const char *arg, const char *htmldir, STRBUF *URL)
 	 */
 	makefileurl(makepath(htmldir, ptable.part[1].start, NULL), 0, URL);
 	recover(&ptable);
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 }
 /**
  * getURL: get URL of the specified file.
@@ -278,13 +280,13 @@ getURL(const char *file, const char *htmldir, STRBUF *URL)
 {
 	char *p;
 	char buf[MAXPATHLEN];
-	STRBUF *sb = strbuf_open(0);
+	STRBUF *sb = strbuf_pool_assign(0);
 	p = normalize(file, get_root_with_slash(), cwd, buf, sizeof(buf));
 	if (p != NULL && convertpath(dbpath, htmldir, p, sb) == 0)
 		makefileurl(strbuf_value(sb), linenumber, URL);
 	else
 		makefileurl(realpath(file, buf), 0, URL);
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 }
 /**
  * convertpath: convert source file into hypertext path.
@@ -469,8 +471,8 @@ void
 show_page_by_url(const char *browser, const char *url)
 {
 	char *argv[4];
-	STRBUF  *sb = strbuf_open(0);
-	STRBUF  *arg = strbuf_open(0);
+	STRBUF  *sb = strbuf_pool_assign(0);
+	STRBUF  *arg = strbuf_pool_assign(0);
 	/*
 	 * Browsers which have openURL() command.
 	 */
@@ -519,7 +521,7 @@ show_page_by_url(const char *browser, const char *url)
 			dump_argv(argv);
 		execvp(browser, argv);
 	}
-	strbuf_close(sb);
-	strbuf_close(arg);
+	strbuf_pool_release(sb);
+	strbuf_pool_release(arg);
 }
 #endif

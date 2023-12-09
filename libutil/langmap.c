@@ -71,7 +71,7 @@ setup_langmap(const char *map)
 	char *p;
 	int onsuffix = 0;		/* not on suffix string */
 
-	active_map = strbuf_open(0);
+	active_map = strbuf_pool_assign(0);
 	strbuf_puts(active_map, map);
 	for (p = strbuf_value(active_map); *p; p++) {
 		/*
@@ -86,7 +86,7 @@ setup_langmap(const char *map)
 	}
 	if (onsuffix == 0)
 		die_with_code(2, "syntax error in langmap '%s'.", map);
-	/* strbuf_close(active_map); */
+	/* strbuf_pool_release(active_map); */
 }
 /**
  * trim suffix list
@@ -156,8 +156,8 @@ trim_langmap(const char *map)
 	} SUFFIX;
 	STATIC_STRBUF(sb);
 	const char *p = map;
-	STRBUF *name = strbuf_open(0);
-	STRBUF *list = strbuf_open(0);
+	STRBUF *name = strbuf_pool_assign(0);
+	STRBUF *list = strbuf_pool_assign(0);
 	STRHASH *hash = strhash_open(10);
 	VARRAY *vb = varray_open(sizeof(SUFFIX), 32);
 	SUFFIX *ent = NULL;
@@ -216,8 +216,8 @@ trim_langmap(const char *map)
 		free(ent->name);
 		free(ent->list);
 	}
-	strbuf_close(name);
-	strbuf_close(list);
+	strbuf_pool_release(name);
+	strbuf_pool_release(list);
 	strhash_close(hash);
 	varray_close(vb);
 	return strbuf_value(sb);

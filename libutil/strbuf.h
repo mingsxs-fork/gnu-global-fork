@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #endif
 #include <stdarg.h>
+#include "varray.h"
 
 #ifndef __attribute__
 /* This feature is available in gcc versions 2.5 and later.  */
@@ -65,6 +66,16 @@ typedef struct _strbuf {
 	char *curp;
 	int sbufsize;
 } STRBUF;
+
+typedef struct _strbuf_pool {
+	VARRAY *vb;
+	unsigned int *map;
+	int mapsize;
+	int limit;
+	/* counters */
+	int assigned;
+	int released;
+} STRBUF_POOL;
 
 /**
  * STATIC_STRBUF(sb):
@@ -136,6 +147,7 @@ typedef struct _strbuf {
 void strbuf_dump(char *);
 #endif
 void __strbuf_expandbuf(STRBUF *, int);
+void __strbuf_init(STRBUF *, int);
 STRBUF *strbuf_open(int);
 void strbuf_reset(STRBUF *);
 void strbuf_clear(STRBUF *);
@@ -161,5 +173,11 @@ STRBUF *strbuf_open_tempbuf(void);
 void strbuf_release_tempbuf(STRBUF *);
 char *next_string(char *);
 void strbuf_prepends(STRBUF *, const char *);
+
+/* strbuf pool */
+void strbuf_pool_init(int);
+void strbuf_pool_close(void);
+STRBUF *strbuf_pool_assign(int);
+void strbuf_pool_release(STRBUF *);
 
 #endif /* ! _STRBUF_H */

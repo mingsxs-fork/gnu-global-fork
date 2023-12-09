@@ -45,10 +45,10 @@ BOOL	buildonly = NO;		/**< only build the database */
 void
 rebuild(void)
 {
-	STRBUF  *sb = strbuf_open(0);
+	STRBUF  *sb = strbuf_pool_assign(0);
 
 	strbuf_sprintf(sb, "%s -i", quote_shell(gtags_command));
 	if (system(strbuf_value(sb)) != 0)
 		postfatal("gtags-cscope: '%s' failed.\n", strbuf_value(sb));
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 }

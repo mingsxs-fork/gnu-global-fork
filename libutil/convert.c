@@ -369,7 +369,7 @@ convert_open(int type, int format, const char *root, const char *cwd, const char
 	/*
 	 * set base directory.
 	 */
-	cv->abspath = strbuf_open(MAXPATHLEN);
+	cv->abspath = strbuf_pool_assign(MAXPATHLEN);
 	strbuf_puts(cv->abspath, root);
 	strbuf_unputc(cv->abspath, '/');
 	cv->start_point = strbuf_getlen(cv->abspath);
@@ -637,7 +637,7 @@ convert_put_using(CONVERT *cv, const char *tag, const char *path, int lineno, co
 void
 convert_close(CONVERT *cv)
 {
-	strbuf_close(cv->abspath);
+	strbuf_pool_release(cv->abspath);
 	gpath_close();
 	free(cv);
 }

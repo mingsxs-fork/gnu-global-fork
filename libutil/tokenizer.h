@@ -77,13 +77,11 @@ struct tokenizer {
 };
 
 
-int tokenizer_open(const struct gtags_path *, struct tokenizer_ops *, void *);
+TOKENIZER *tokenizer_open(const struct gtags_path *, struct tokenizer_ops *, void *);
 void tokenizer_close(TOKENIZER *);
 TOKENIZER *current_tokenizer(void);
 int opened_tokenizers(void);
 
-#define like_symbol_begin(c) (c & 0x80 || isalpha(c) || c == '_')
-#define like_symbol(c) (c & 0x80 || isalnum(c) || c == '_')
 #define cp_at_first(t) (t->sp && t->sp == (t->cp ? t->cp - 1 : t->lp))
 
 #if 0

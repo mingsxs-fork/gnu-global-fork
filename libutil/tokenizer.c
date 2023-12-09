@@ -38,7 +38,6 @@
 #endif
 #include <ctype.h>
 
-
 #include "die.h"
 #include "strlimcpy.h"
 #include "strbuf.h"
@@ -47,17 +46,17 @@
 #include "tokenizer.h"
 #include "likely.h"
 
-
 #define STACK_EXPAND	32
-#define empty_stack(ts)	(!ts || ts->stack_top < 0)
+#define empty_stack(vs)	(!vs || vs->stack_top < 0)
 
-static VSTACK *tokenizer_stack = NULL;  /* global tokenizer stack */
-static TOKENIZER *CURRENT;
+static VSTACK *tokenizer_stack = NULL;  /* tokenizer stack */
+
+TOKENIZER *CURRENT;  /* current tokenizer */
 
 /* when we call those default tokenizer ops functions,
  * it means the tokenizer object has already been created,
  * since we can only call them from an opened tokenizer.
- * and this guarantee the MACRO 'current' won't be NULL.
+ * and this guarantee the `CURRENT` won't be NULL.
  */
 static int	def_tokenizer_nexttoken(const char *, int (*)(const char *, int));
 static void	def_tokenizer_pushbacktoken(void);
@@ -86,7 +85,7 @@ int opened_tokenizers (void)
 	return (tokenizer_stack->stack_top + 1);
 }
 
-int
+TOKENIZER *
 tokenizer_open (const struct gtags_path *gpath, struct tokenizer_ops *ops, void *lang_data)
 {
 	TOKENIZER *t;
@@ -102,15 +101,15 @@ tokenizer_open (const struct gtags_path *gpath, struct tokenizer_ops *ops, void 
 	t->lang_priv = lang_data; /* lang private data */
 	if ((t->ip = fopen(t->gpath->path, "rb")) == NULL)
 		goto failed;
-	t->ib = strbuf_open(MAXBUFLEN);
+	t->ib = strbuf_pool_assign(MAXBUFLEN);
 	CURRENT = t; /* update CURRENT */
-	return 1;
+	return t;
 
 failed:
 	(void)vstack_pop(tokenizer_stack);
 	warning("open tokenizer failed, ignored");
 	CURRENT = vstack_top(tokenizer_stack);
-	return 0;
+	return NULL;
 }
 
 void
@@ -120,12 +119,10 @@ tokenizer_close (TOKENIZER *t)
 	if (t && t == CURRENT) {
 		t = vstack_pop(tokenizer_stack);
 		if (t->ib) {
-			strbuf_close(t->ib);
-			t->ib = NULL;
+			strbuf_pool_release(t->ib);
 		}
 		if (t->ip) {
 			fclose(t->ip);
-			t->ip = NULL;
 		}
 		/* update CURRENT tokenizer pointer */
 		if (unlikely(empty_stack(tokenizer_stack)))
@@ -154,9 +151,9 @@ cp_at_first_nonspace (TOKENIZER *t)
 }
 
 TOKENIZER *
-current_tokenizer (void)
+current_tokenizer(void)
 {
-	return CURRENT;  /* return current tokenizer */
+	return CURRENT;
 }
 
 static int
@@ -306,7 +303,6 @@ def_tokenizer_nexttoken (const char *interested, int (* reserved)(const char *, 
 	char *ptok;
 	int sharp = 0, percent = 0;
 
-/* function internal macros */
 #define _tklen (ptok - t->token)
 #define _append_tk { \
 	ptok    = t->token; \
@@ -322,6 +318,7 @@ def_tokenizer_nexttoken (const char *interested, int (* reserved)(const char *, 
 	if (reserved && (c = (*reserved)(t->token, _tklen)) == 0) \
 		break; \
 }
+
 	if (unlikely(t->ptoken[0] != '\0')) {
 		strlimcpy(t->token, t->ptoken, sizeof(t->token));
 		t->ptoken[0] = '\0';
@@ -412,7 +409,7 @@ def_tokenizer_nexttoken (const char *interested, int (* reserved)(const char *, 
 			}
 		}
 		/* symbol */
-		else if (likely(c & 0x80 || isalpha(c) || c == '_')) {
+		else if (likely(c & 0x80 || isalpha(c) || c == '_')) {  /* symbol token begins */
 			ptok = t->token;
 			if (unlikely(sharp)) {
 				sharp = 0;
@@ -443,7 +440,6 @@ def_tokenizer_nexttoken (const char *interested, int (* reserved)(const char *, 
 				c = (*reserved)(t->token, _tklen);
 			break;
 		}
-/* remove function internal macros */
 #undef _append_tk
 #undef _break_on_rsvd
 #undef _break_on_norsvd

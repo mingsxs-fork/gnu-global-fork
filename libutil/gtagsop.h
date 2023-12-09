@@ -105,15 +105,8 @@ typedef struct {
 } GTP;
 
 typedef struct {
-	VSTACK *vs_taghash;
-	VSTACK *vs_fid;
-	POOL *pool;
-} GTVSTACK;
-
-typedef struct {
 	DBOP *dbop;			/**< descripter of DBOP */
 	DBOP *gtags;			/**< descripter of GTAGS */
-	DBOP *gtag_names;	/** gtags symbols */
 	int format_version;		/**< format version */
 	int format;			/**< GTAGS_COMPACT, GTAGS_COMPRESS */
 	int mode;			/**< mode */
@@ -148,8 +141,6 @@ typedef struct {
 
 	/** used for path name only read */
 	STRHASH *path_hash;
-	/** used for compact format */
-	GTVSTACK *vstacks;
 	/*
 	 * Stuff for calling dbop
 	 */
@@ -163,12 +154,11 @@ typedef struct {
 const char *dbname(int);
 GTOP *gtags_open(const char *, const char *, int, int, int);
 void gtags_put_using(GTOP *, const char *, int, const char *, const char *);
-void gtags_flush(GTOP *);
+void gtags_flush(GTOP *, const char *);
 void gtags_delete(GTOP *, IDSET *);
 GTP *gtags_first(GTOP *, const char *, int);
 GTP *gtags_next(GTOP *);
 void gtags_show_statistics(GTOP *);
 void gtags_close(GTOP *);
-int gtags_exists(GTOP *, const char *);
 
 #endif /* ! _GTOP_H_ */

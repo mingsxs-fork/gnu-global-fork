@@ -86,7 +86,7 @@ put_inc(const char *file, const char *path, int id)
 		data->name = entry->name;
 #endif
 		data->id = id;
-		data->contents = strbuf_open(0);
+		data->contents = strbuf_pool_assign(0);
 		data->ref_contents = NULL;
 		data->count = 0;
 		data->ref_count = 0;
@@ -144,7 +144,7 @@ void
 put_included(struct data *data, const char *path)
 {
 	if (data->ref_contents == NULL)
-		data->ref_contents = strbuf_open(0);
+		data->ref_contents = strbuf_pool_assign(0);
 	strbuf_puts0(data->ref_contents, path);
 	data->ref_count++;
 }

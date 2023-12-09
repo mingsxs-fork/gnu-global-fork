@@ -72,7 +72,6 @@ static const char *seekto(const char *, int);
 static int is_defined_in_GTAGS(GTOP *, const char *);
 static char *get_prefix(const char *, int);
 static int gtags_restart(GTOP *);
-static void flush_pool(GTOP *);
 static void segment_read(GTOP *);
 
 /**
@@ -429,11 +428,6 @@ gtags_open(const char *dbpath, const char *root, int db, int mode, int flags)
 		if (gtop->format & GTAGS_COMPNAME)
 			dbop_putoption(gtop->dbop, COMPNAMEKEY, NULL);
 		dbop_putversion(gtop->dbop, gtop->format_version); 
-		if (gtop->db == GTAGS) {
-			gtop->gtag_names = dbop_open(NULL, dbmode, 0644, 0);
-			if (!gtop->gtag_names)
-				die("cannot create gtags name db when GTAGS_CREATE.");
-		}
 	} else {
 		/*
 		 * recognize format version of GTAGS. 'format version record'
@@ -469,21 +463,17 @@ gtags_open(const char *dbpath, const char *root, int db, int mode, int flags)
 			die("GPATH not found.");
 	}
 	if (gtop->mode != GTAGS_READ)
-		gtop->sb = strbuf_open(0);	/* This buffer is used for working area. */
+		gtop->sb = strbuf_pool_assign(0);	/* This buffer is used for working area. */
 	/*
 	 * Stuff for compact format.
 	 */
 	if (gtop->format & GTAGS_COMPACT) {
 		assert(root != NULL);
 		strlimcpy(gtop->root, root, sizeof(gtop->root));
-		if (gtop->mode != GTAGS_READ) {
-			gtop->vstacks = check_calloc(sizeof(GTVSTACK), 1);
-			gtop->vstacks->vs_taghash = vstack_open(sizeof(STRHASH), GTVSTACK_DEFAULT_EXPAND);
-			gtop->vstacks->vs_fid = vstack_open(sizeof(const char *), GTVSTACK_DEFAULT_EXPAND);
-			gtop->vstacks->pool = pool_open();
-		}
+		if (gtop->mode != GTAGS_READ)
+			gtop->path_hash = strhash_open(HASHBUCKETS);
 	}
-	gtop->sb_compress = strbuf_open(0);
+	gtop->sb_compress = strbuf_pool_assign(0);
 	return gtop;
 }
 /**
@@ -501,18 +491,6 @@ gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const cha
 	const char *key;
 
 	if (gtop->format & GTAGS_COMPACT && gtop->mode != GTAGS_READ) {
-		STRHASH *taghash;
-		const char **pfid = vstack_top(gtop->vstacks->vs_fid);
-		/* decide if we see a new path */
-		if (pfid && *pfid == fid) {
-			taghash = vstack_top(gtop->vstacks->vs_taghash);
-		} else {
-			/* push new taghash and fid to stack */
-			taghash = vstack_push(gtop->vstacks->vs_taghash);
-			pfid = vstack_push(gtop->vstacks->vs_fid);
-			strhash_init(taghash, HASHBUCKETS, gtop->vstacks->pool);
-			*pfid = fid;
-		}
 		/*
 		 * Register each record into the pool.
 		 *
@@ -524,14 +502,11 @@ gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const cha
 		 * "funcB"   |34| 2| 5|66| 3|...
 		 * ...
 		 */
-		struct sh_entry *entry = strhash_assign(taghash, tag, 1);
+		struct sh_entry *entry = strhash_assign(gtop->path_hash, tag, 1);
 		if (entry->value == NULL)
 			entry->value = varray_open(sizeof(int), 100);
 		*(int *)varray_append((VARRAY *)entry->value) = lno;
 		return;
-	}
-	if (gtop->mode == GTAGS_CREATE && gtop->db == GTAGS) {
-		dbop_put_key_only(gtop->gtag_names, tag);
 	}
 	/*
 	 * extract method when class method definition.
@@ -568,13 +543,130 @@ gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const cha
  *	@param[in]	fid	file id
  */
 void
-gtags_flush(GTOP *gtop)
+gtags_flush(GTOP *gtop, const char *fid)
 {
-	if (gtop->format & GTAGS_COMPACT) {
-		flush_pool(gtop);
-		if (gtop->path_hash)
-			strhash_reset(gtop->path_hash);
+	struct sh_entry *entry;
+	int header_offset;
+	int i, last;
+
+	if (!(gtop->format & GTAGS_COMPACT) || gtop->mode == GTAGS_READ)
+		return ;
+	if (gtop->path_hash == NULL || gtop->path_hash->entries <= 0)
+		return ;
+	/*
+	 * Write records as compact format and free line number table
+	 * for each entry in the pool.
+	 */
+	for (entry = strhash_first(gtop->path_hash); entry; entry = strhash_next(gtop->path_hash)) {
+		VARRAY *vb = (VARRAY *)entry->value;
+		int *lno_array = varray_assign(vb, 0, 0);
+		const char *key = entry->name;
+		/*
+		 * extract method when class method definition.
+		 *
+		 * Ex: Class::method(...)
+		 *
+		 * key	= 'method'
+		 * data = 'Class::method  103 ./class.cpp ...'
+		 */
+		if (gtop->flags & GTAGS_EXTRACTMETHOD) {
+			if ((key = locatestring(entry->name, ".", MATCH_LAST)) != NULL)
+				key++;
+			else if ((key = locatestring(entry->name, "::", MATCH_LAST)) != NULL)
+				key += 2;
+			else
+				key = entry->name;
+		}
+		/* Sort line number table */
+		qsort(lno_array, vb->length, sizeof(int), compare_lineno); 
+
+		strbuf_reset(gtop->sb);
+		strbuf_puts(gtop->sb, fid);
+		strbuf_putc(gtop->sb, ' ');
+		if (gtop->format & GTAGS_COMPNAME) {
+			strbuf_puts(gtop->sb, compress(entry->name, key, gtop->sb_compress));
+		} else {
+			strbuf_puts(gtop->sb, entry->name);
+		}
+		strbuf_putc(gtop->sb, ' ');
+		header_offset = strbuf_getlen(gtop->sb);
+		/*
+		 * If GTAGS_COMPLINE flag is set, each line number is expressed as the
+		 * difference from the previous line number except for the head.
+		 * GTAGS_COMPLINE is set by default in format version 5.
+		 */
+		if (gtop->format & GTAGS_COMPLINE) {
+			int cont = 0;
+
+			last = 0;			/* line 0 doesn't exist */
+			for (i = 0; i < vb->length; i++) {
+				int n = lno_array[i];
+
+				if (n == last)
+					continue;
+				if (last > 0 && n == last + 1) {
+					if (!cont) {
+						/*
+						 * Don't use range expression at the head.
+						 */
+						if (strbuf_getlen(gtop->sb) == header_offset)
+							strbuf_putn(gtop->sb, n);
+						else
+							cont = last;
+					}
+				} else {
+					/*
+					 * Range expression. ex: 10-2 means 10 11 12
+					 */
+					if (cont) {
+						strbuf_putc(gtop->sb, '-');
+						strbuf_putn(gtop->sb, last - cont);
+						cont = 0;
+					}
+					if (strbuf_getlen(gtop->sb) > header_offset) {
+						strbuf_putc(gtop->sb, ',');
+						strbuf_putn(gtop->sb, n - last);
+					} else {
+						strbuf_putn(gtop->sb, n);
+					}
+					if (strbuf_getlen(gtop->sb) > DBOP_PAGESIZE / 4) {
+						dbop_put_tag(gtop->dbop, key, strbuf_value(gtop->sb));
+						strbuf_setlen(gtop->sb, header_offset);
+					}
+				}
+				last = n;
+			}
+			if (cont) {
+				strbuf_putc(gtop->sb, '-');
+				strbuf_putn(gtop->sb, last - cont);
+			}
+		} else {
+			/*
+			 * This code is to support older format (version 4).
+			 */
+			last = 0;			/* line 0 doesn't exist */
+			for (i = 0; i < vb->length; i++) {
+				int n = lno_array[i];
+
+				if (n == last)
+					continue;
+				if (strbuf_getlen(gtop->sb) > header_offset)
+					strbuf_putc(gtop->sb, ',');
+				strbuf_putn(gtop->sb, n);
+				if (strbuf_getlen(gtop->sb) > DBOP_PAGESIZE / 4) {
+					dbop_put_tag(gtop->dbop, key, strbuf_value(gtop->sb));
+					strbuf_setlen(gtop->sb, header_offset);
+				}
+				last = n;
+			}
+		}
+		if (strbuf_getlen(gtop->sb) > header_offset) {
+			dbop_put_tag(gtop->dbop, key, strbuf_value(gtop->sb));
+		}
+		/* Free line number table */
+		varray_close(vb);
 	}
+	strhash_reset(gtop->path_hash);
 }
 /**
  * gtags_delete: delete records belong to set of fid.
@@ -590,7 +682,7 @@ gtags_delete(GTOP *gtop, IDSET *deleteset)
 
 #ifdef USE_SQLITE3
 	if (gtop->dbop->openflags & DBOP_SQLITE3) {
-		STRBUF *where = strbuf_open(0);
+		STRBUF *where = strbuf_pool_assign(0);
 		long id;
 		strbuf_puts(where, "(");
 		for (id = idset_first(deleteset); id != END_OF_ID; id = idset_next(deleteset)) {
@@ -601,7 +693,7 @@ gtags_delete(GTOP *gtop, IDSET *deleteset)
 		strbuf_unputc(where, ',');
 		strbuf_puts(where, ")");
 		dbop_delete(gtop->dbop, strbuf_value(where));
-		strbuf_close(where);
+		strbuf_pool_release(where);
 	} else
 #endif
 	for (tagline = dbop_first(gtop->dbop, NULL, NULL, 0); tagline; tagline = dbop_next(gtop->dbop)) {
@@ -1002,166 +1094,18 @@ gtags_close(GTOP *gtop)
 	if (gtop->path_array)
 		free(gtop->path_array);
 	if (gtop->sb)
-		strbuf_close(gtop->sb);
+		strbuf_pool_release(gtop->sb);
 	if (gtop->sb_compress)
-		strbuf_close(gtop->sb_compress);
+		strbuf_pool_release(gtop->sb_compress);
 	if (gtop->vb)
 		varray_close(gtop->vb);
 	if (gtop->path_hash)
 		strhash_close(gtop->path_hash);
-	if (gtop->vstacks) {  /* close gtags vstacks */
-		void *entry;
-		if (gtop->vstacks->vs_taghash) {
-			while ((entry = vstack_pop(gtop->vstacks->vs_taghash)) != NULL)
-				strhash_close_buckets((STRHASH *)entry);
-			vstack_close(gtop->vstacks->vs_taghash);
-		}
-		if (gtop->vstacks->vs_fid)
-			vstack_close(gtop->vstacks->vs_fid);
-		if (gtop->vstacks->pool)
-			pool_close(gtop->vstacks->pool);
-		free(gtop->vstacks);
-	}
-	if (gtop->gtag_names)
-		dbop_close(gtop->gtag_names);
 	if (gtop->gtags)
 		dbop_close(gtop->gtags);
 	gpath_close();
 	dbop_close(gtop->dbop);
 	free(gtop);
-}
-/**
- * flush_pool: flush and write the pool as compact format.
- *
- *	@param[in]	gtop	descripter of GTOP
- */
-static void
-flush_pool(GTOP *gtop)
-{
-	struct sh_entry *entry;
-	int header_offset;
-	int i, last;
-
-	if (!gtop->vstacks || vstack_empty(gtop->vstacks->vs_fid))
-		return ;
-	STRHASH *taghash = vstack_pop(gtop->vstacks->vs_taghash);
-	const char **pfid = vstack_pop(gtop->vstacks->vs_fid);
-	/*
-	 * Write records as compact format and free line number table
-	 * for each entry in the pool.
-	 */
-	for (entry = strhash_first(taghash); entry; entry = strhash_next(taghash)) {
-		VARRAY *vb = (VARRAY *)entry->value;
-		int *lno_array = varray_assign(vb, 0, 0);
-		const char *key = entry->name;
-		/*
-		 * extract method when class method definition.
-		 *
-		 * Ex: Class::method(...)
-		 *
-		 * key	= 'method'
-		 * data = 'Class::method  103 ./class.cpp ...'
-		 */
-		if (gtop->flags & GTAGS_EXTRACTMETHOD) {
-			if ((key = locatestring(entry->name, ".", MATCH_LAST)) != NULL)
-				key++;
-			else if ((key = locatestring(entry->name, "::", MATCH_LAST)) != NULL)
-				key += 2;
-			else
-				key = entry->name;
-		}
-		/* Sort line number table */
-		qsort(lno_array, vb->length, sizeof(int), compare_lineno); 
-
-		strbuf_reset(gtop->sb);
-		strbuf_puts(gtop->sb, *pfid);
-		strbuf_putc(gtop->sb, ' ');
-		if (gtop->format & GTAGS_COMPNAME) {
-			strbuf_puts(gtop->sb, compress(entry->name, key, gtop->sb_compress));
-		} else {
-			strbuf_puts(gtop->sb, entry->name);
-		}
-		strbuf_putc(gtop->sb, ' ');
-		header_offset = strbuf_getlen(gtop->sb);
-		/*
-		 * If GTAGS_COMPLINE flag is set, each line number is expressed as the
-		 * difference from the previous line number except for the head.
-		 * GTAGS_COMPLINE is set by default in format version 5.
-		 */
-		if (gtop->format & GTAGS_COMPLINE) {
-			int cont = 0;
-
-			last = 0;			/* line 0 doesn't exist */
-			for (i = 0; i < vb->length; i++) {
-				int n = lno_array[i];
-
-				if (n == last)
-					continue;
-				if (last > 0 && n == last + 1) {
-					if (!cont) {
-						/*
-						 * Don't use range expression at the head.
-						 */
-						if (strbuf_getlen(gtop->sb) == header_offset)
-							strbuf_putn(gtop->sb, n);
-						else
-							cont = last;
-					}
-				} else {
-					/*
-					 * Range expression. ex: 10-2 means 10 11 12
-					 */
-					if (cont) {
-						strbuf_putc(gtop->sb, '-');
-						strbuf_putn(gtop->sb, last - cont);
-						cont = 0;
-					}
-					if (strbuf_getlen(gtop->sb) > header_offset) {
-						strbuf_putc(gtop->sb, ',');
-						strbuf_putn(gtop->sb, n - last);
-					} else {
-						strbuf_putn(gtop->sb, n);
-					}
-					if (strbuf_getlen(gtop->sb) > DBOP_PAGESIZE / 4) {
-						dbop_put_tag(gtop->dbop, key, strbuf_value(gtop->sb));
-						strbuf_setlen(gtop->sb, header_offset);
-					}
-				}
-				last = n;
-			}
-			if (cont) {
-				strbuf_putc(gtop->sb, '-');
-				strbuf_putn(gtop->sb, last - cont);
-			}
-		} else {
-			/*
-			 * This code is to support older format (version 4).
-			 */
-			last = 0;			/* line 0 doesn't exist */
-			for (i = 0; i < vb->length; i++) {
-				int n = lno_array[i];
-
-				if (n == last)
-					continue;
-				if (strbuf_getlen(gtop->sb) > header_offset)
-					strbuf_putc(gtop->sb, ',');
-				strbuf_putn(gtop->sb, n);
-				if (strbuf_getlen(gtop->sb) > DBOP_PAGESIZE / 4) {
-					dbop_put_tag(gtop->dbop, key, strbuf_value(gtop->sb));
-					strbuf_setlen(gtop->sb, header_offset);
-				}
-				last = n;
-			}
-		}
-		if (strbuf_getlen(gtop->sb) > header_offset) {
-			dbop_put_tag(gtop->dbop, key, strbuf_value(gtop->sb));
-		}
-		/* Free line number table */
-		varray_close(vb);
-	}
-	strhash_close_buckets(taghash); /* close allocted taghash buckets */
-	if (vstack_empty(gtop->vstacks->vs_taghash))
-		pool_reset(gtop->vstacks->pool);
 }
 /**
  * Read a tag segment with sorting.
@@ -1236,14 +1180,4 @@ segment_read(GTOP *gtop)
 	if (!(gtop->flags & GTOP_NOSORT))
 		qsort(gtop->gtp_array, gtop->gtp_count, sizeof(GTP),
 			gtop->flags & GTOP_NEARSORT ? compare_neartags : compare_tags);
-}
-
-int
-gtags_exists(GTOP *gtop, const char *name)
-{
-	if (gtop->gtag_names) {
-		if (dbop_exists_key(gtop->gtag_names, name))
-			return 1;
-	}
-	return 0;
 }

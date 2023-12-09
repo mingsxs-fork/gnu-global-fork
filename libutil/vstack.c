@@ -135,7 +135,5 @@ vstack_close(VSTACK *vs)
 int
 vstack_empty(VSTACK *vs)
 {
-	if (unlikely(vs->stack_top < 0))
-		return 1;
-	return 0;
+	return (vs->stack_top < 0) ? 1 : 0;
 }

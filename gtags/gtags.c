@@ -97,7 +97,7 @@ const char *dump_target;
 char *single_update;
 int statistics = STATISTICS_STYLE_NONE;
 int explain;
-struct gtags_priv_data g_priv_data;  /* global gtags data shared by all parsed files */
+struct gtags_priv_data g_priv_data;  /* global gtags private data */
 #ifdef USE_SQLITE3
 int use_sqlite3;
 #endif
@@ -138,12 +138,12 @@ printconf(const char *name)
 	else if (getconfb(name))
 		fprintf(stdout, "1\n");
 	else {
-		STRBUF *sb = strbuf_open(0);
+		STRBUF *sb = strbuf_pool_assign(0);
 		if (getconfs(name, sb))
 			fprintf(stdout, "%s\n", strbuf_value(sb));
 		else
 			exist = 0;
-		strbuf_close(sb);
+		strbuf_pool_release(sb);
 	}
 	return exist;
 }
@@ -209,7 +209,7 @@ static const char *gtags_parser;		/**< gtags_parser */
 static void
 configuration()
 {
-	STRBUF *sb = strbuf_open(0);
+	STRBUF *sb = strbuf_pool_assign(0);
 
 	if (getconfb("extractmethod"))
 		extractmethod = 1;
@@ -219,17 +219,18 @@ configuration()
 	strbuf_reset(sb);
 	if (getconfs("gtags_parser", sb))
 		gtags_parser = check_strdup(strbuf_value(sb));
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 }
 int
 main(int argc, char **argv)
 {
 	char dbpath[MAXPATHLEN];
 	char cwd[MAXPATHLEN];
-	STRBUF *sb = strbuf_open(0);
 	int optchar;
 	int option_index = 0;
 	STATISTICS_TIME *tim;
+	strbuf_pool_init(1024); /* create strbuf pool for later use */
+	STRBUF *sb = strbuf_pool_assign(0);
 
 	/*
 	 * pick up --gtagsconf, --gtagslabel and --directory (-C).
@@ -499,12 +500,14 @@ main(int argc, char **argv)
 	 */
 	if (iflag) {
 		if (argc > 0)
-			realpath(*argv, dbpath);
+			if (realpath(*argv, dbpath) == NULL)
+				die("invalid dbpath given: %s.", *argv);
 		else if (!gtagsexist(cwd, dbpath, MAXPATHLEN, vflag))
 			strlimcpy(dbpath, cwd, sizeof(dbpath));
 	} else {
 		if (argc > 0)
-			realpath(*argv, dbpath);
+			if (realpath(*argv, dbpath) == NULL)
+				die("invalid dbpath given: %s.", *argv);
 		else if (Oflag) {
 			char *objdir = getobjdir(cwd, vflag);
 
@@ -639,8 +642,9 @@ main(int argc, char **argv)
 	if (vflag)
 		fprintf(stderr, "[%s] Done.\n", now());
 	closeconf();
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 	print_statistics(statistics);
+	strbuf_pool_close(); /* close strbuf pool */
 	return 0;
 }
 /**
@@ -655,15 +659,15 @@ incremental(const char *dbpath, const char *root)
 {
 	STATISTICS_TIME *tim;
 	struct stat statp;
-	time_t gtags_mtime;
-	STRBUF *addlist = strbuf_open(0);
-	STRBUF *deletelist = strbuf_open(0);
-	STRBUF *addlist_other = strbuf_open(0);
+	STRBUF *addlist = strbuf_pool_assign(0);
+	STRBUF *deletelist = strbuf_pool_assign(0);
+	STRBUF *addlist_other = strbuf_pool_assign(0);
 	IDSET *deleteset, *findset;
 	int updated = 0;
 	const char *path;
 	unsigned int id, limit;
-
+	struct gtags_path_add_data add_data;
+	/* init gtags private data */
 	memset(&g_priv_data, 0, sizeof(g_priv_data));
 	g_priv_data.gconf.vflag =			!!vflag;
 	g_priv_data.gconf.wflag =			!!wflag;
@@ -685,7 +689,6 @@ incremental(const char *dbpath, const char *root)
 	path = makepath(dbpath, dbname(GTAGS), NULL);
 	if (stat(path, &statp) < 0)
 		die("stat failed '%s'.", path);
-	gtags_mtime = statp.st_mtime;
 
 	if (gpath_open(dbpath, 2) < 0)
 		die("GPATH not found.");
@@ -738,43 +741,20 @@ incremental(const char *dbpath, const char *root)
 			total++;
 		}
 	} else {
+		/* init path handler params */
+		add_data.addlist = addlist;
+		add_data.dellist = deletelist;
+		add_data.addlist_other = addlist_other;
+		add_data.findset = findset;
+		add_data.delset = deleteset;
+		add_data.gtag_sb = &statp;
+		add_data.path_sb = NULL;
+		g_priv_data.npath_done = &total;
+		g_priv_data.add_data = &add_data;
 		if (file_list)
-			find_open_filelist(file_list, root, explain);
+			find_proc_filelist(file_list, root, gtags_add_path, &g_priv_data);
 		else
-			find_open(NULL, explain);
-		while ((path = find_read()) != NULL) {
-			const char *fid;
-			int n_fid = 0;
-			int other = 0;
-
-			/* a blank at the head of path means 'NOT SOURCE'. */
-			if (*path == ' ') {
-				if (test("b", ++path))
-					continue;
-				other = 1;
-			}
-			if (stat(path, &statp) < 0)
-				die("stat failed '%s'.", path);
-			fid = gpath_path2fid(path, NULL);
-			if (fid) { 
-				n_fid = atoi(fid);
-				idset_add(findset, n_fid);
-			}
-			if (other) {
-				if (fid == NULL)
-					strbuf_puts0(addlist_other, path);
-			} else {
-				if (fid == NULL) {
-					strbuf_puts0(addlist, path);
-					total++;
-				} else if (gtags_mtime < statp.st_mtime) {
-					strbuf_puts0(addlist, path);
-					total++;
-					idset_add(deleteset, n_fid);
-				}
-			}
-		}
-		find_close();
+			find_proc_path_all(NULL, gtags_add_path, &g_priv_data);
 		/*
 		 * make delete list.
 		 */
@@ -856,9 +836,9 @@ exit:
 			fprintf(stderr, " Global databases are up to date.\n");
 		fprintf(stderr, "[%s] Done.\n", now());
 	}
-	strbuf_close(addlist);
-	strbuf_close(deletelist);
-	strbuf_close(addlist_other);
+	strbuf_pool_release(addlist);
+	strbuf_pool_release(deletelist);
+	strbuf_pool_release(addlist_other);
 	gpath_close();
 	idset_close(deleteset);
 	idset_close(findset);
@@ -878,23 +858,25 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 {
 	int seqno;
 	const char *path, *start, *end;
-	struct gtags_path gpath = {0};
+	struct gtags_path gpath;
+	struct gtags_path_proc_data proc_data;
 	g_priv_data.gpath = &gpath;
+	g_priv_data.proc_data = &proc_data;
 
 	if (vflag)
 		fprintf(stderr, "[%s] Updating '%s' and '%s'.\n", now(), dbname(GTAGS), dbname(GRTAGS));
 	/*
 	 * Open tag files.
 	 */
-	g_priv_data.gtop[GTAGS] = gtags_open(dbpath, root, GTAGS, GTAGS_MODIFY, 0);
+	proc_data.gtop[GTAGS] = gtags_open(dbpath, root, GTAGS, GTAGS_MODIFY, 0);
 	if (test("f", makepath(dbpath, dbname(GRTAGS), NULL))) {
-		g_priv_data.gtop[GRTAGS] = gtags_open(dbpath, root, GRTAGS, GTAGS_MODIFY, 0);
+		proc_data.gtop[GRTAGS] = gtags_open(dbpath, root, GRTAGS, GTAGS_MODIFY, 0);
 	} else {
 		/*
-		 * If you set NULL to g_priv_data.gtop[GRTAGS], parse_file() doesn't write to
+		 * If you set NULL to proc_data.gtop[GRTAGS], parse_file() doesn't write to
 		 * GRTAGS. See gtags_put_symbol().
 		 */
-		g_priv_data.gtop[GRTAGS] = NULL;
+		proc_data.gtop[GRTAGS] = NULL;
 	}
 	/*
 	 * Delete tags from GTAGS.
@@ -914,17 +896,17 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 				fprintf(stderr, " [%d/%d] deleting tags of %s\n", seqno++, total, path + 2);
 			}
 		}
-		gtags_delete(g_priv_data.gtop[GTAGS], deleteset);
-		if (g_priv_data.gtop[GRTAGS] != NULL)
-			gtags_delete(g_priv_data.gtop[GRTAGS], deleteset);
+		gtags_delete(proc_data.gtop[GTAGS], deleteset);
+		if (proc_data.gtop[GRTAGS] != NULL)
+			gtags_delete(proc_data.gtop[GRTAGS], deleteset);
 	}
 	/*
 	 * Set flags.
 	 */
-	g_priv_data.gtop[GTAGS]->flags = 0;
+	proc_data.gtop[GTAGS]->flags = 0;
 	if (extractmethod)
-		g_priv_data.gtop[GTAGS]->flags |= GTAGS_EXTRACTMETHOD;
-	g_priv_data.gtop[GRTAGS]->flags = g_priv_data.gtop[GTAGS]->flags;
+		proc_data.gtop[GTAGS]->flags |= GTAGS_EXTRACTMETHOD;
+	proc_data.gtop[GRTAGS]->flags = proc_data.gtop[GTAGS]->flags;
 	if (vflag)
 		g_priv_data.gconf.parser_flags |= PARSER_VERBOSE;
 	if (debug)
@@ -951,14 +933,14 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 		if (vflag)
 			fprintf(stderr, " [%d/%d] extracting tags of %s\n", seqno, total, trimpath(gpath.path));
 		parse_file(&gpath, g_priv_data.gconf.parser_flags, gtags_put_symbol, &g_priv_data);
-		gtags_flush(g_priv_data.gtop[GTAGS]);
-		if (g_priv_data.gtop[GRTAGS] != NULL)
-			gtags_flush(g_priv_data.gtop[GRTAGS]);
+		gtags_flush(proc_data.gtop[GTAGS], gpath.fid);
+		if (proc_data.gtop[GRTAGS] != NULL)
+			gtags_flush(proc_data.gtop[GRTAGS], gpath.fid);
 	}
 	parser_exit();
-	gtags_close(g_priv_data.gtop[GTAGS]);
-	if (g_priv_data.gtop[GRTAGS] != NULL)
-		gtags_close(g_priv_data.gtop[GRTAGS]);
+	gtags_close(proc_data.gtop[GTAGS]);
+	if (proc_data.gtop[GRTAGS] != NULL)
+		gtags_close(proc_data.gtop[GRTAGS]);
 }
 /**
  * createtags: create tags file
@@ -970,11 +952,12 @@ void
 createtags(const char *dbpath, const char *root)
 {
 	STATISTICS_TIME *tim;
-	STRBUF *sb = strbuf_open(0);
+	STRBUF *sb = strbuf_pool_assign(0);
 	int openflags;
-
+	struct gtags_path_proc_data proc_data;
+	/* init gtags private data */
 	memset(&g_priv_data, 0, sizeof(g_priv_data));
-	g_priv_data.gpath_handled = &total;
+	g_priv_data.proc_data = &proc_data;
 	g_priv_data.gconf.vflag =			!!vflag;
 	g_priv_data.gconf.wflag = 			!!wflag;
 	g_priv_data.gconf.qflag = 			!!qflag;
@@ -982,6 +965,7 @@ createtags(const char *dbpath, const char *root)
 	g_priv_data.gconf.iflag = 			!!iflag;
 	g_priv_data.gconf.extractmethod =	!!extractmethod;
 	g_priv_data.gconf.explain =			!!explain;
+	g_priv_data.npath_done = &total;
 
 	tim = statistics_time_start("Time of creating %s and %s.", dbname(GTAGS), dbname(GRTAGS));
 	if (vflag)
@@ -991,12 +975,12 @@ createtags(const char *dbpath, const char *root)
 	if (use_sqlite3)
 		openflags |= GTAGS_SQLITE3;
 #endif
-	g_priv_data.gtop[GTAGS] = gtags_open(dbpath, root, GTAGS, GTAGS_CREATE, openflags);
-	g_priv_data.gtop[GTAGS]->flags = 0;
+	proc_data.gtop[GTAGS] = gtags_open(dbpath, root, GTAGS, GTAGS_CREATE, openflags);
+	proc_data.gtop[GTAGS]->flags = 0;
 	if (extractmethod)
-		g_priv_data.gtop[GTAGS]->flags |= GTAGS_EXTRACTMETHOD;
-	g_priv_data.gtop[GRTAGS] = gtags_open(dbpath, root, GRTAGS, GTAGS_CREATE, openflags);
-	g_priv_data.gtop[GRTAGS]->flags = g_priv_data.gtop[GTAGS]->flags;
+		proc_data.gtop[GTAGS]->flags |= GTAGS_EXTRACTMETHOD;
+	proc_data.gtop[GRTAGS] = gtags_open(dbpath, root, GRTAGS, GTAGS_CREATE, openflags);
+	proc_data.gtop[GRTAGS]->flags = proc_data.gtop[GTAGS]->flags;
 	g_priv_data.gconf.parser_flags = 0;
 	if (vflag)
 		g_priv_data.gconf.parser_flags |= PARSER_VERBOSE;
@@ -1012,15 +996,12 @@ createtags(const char *dbpath, const char *root)
 	 * Add tags to GTAGS and GRTAGS.
 	 */
 	if (file_list)
-		find_open_filelist(file_list, root, explain);
+		find_proc_filelist(file_list, root, gtags_proc_path, &g_priv_data);
 	else
-		make_path_tree(NULL);
+		find_proc_path_all(NULL, gtags_proc_path, &g_priv_data);
 	/* start parsing source files */
-	if (path_tree_traverse(gtags_handle_path, &g_priv_data) != 0)
-		die("traverse path tree failed, gtags stopped.");
-	gtags_close(g_priv_data.gtop[GTAGS]);
-	gtags_close(g_priv_data.gtop[GRTAGS]);
-	free_path_tree();
+	gtags_close(proc_data.gtop[GTAGS]);
+	gtags_close(proc_data.gtop[GRTAGS]);
 	statistics_time_end(tim);
 	strbuf_reset(sb);
 	if (getconfs("GTAGS_extra", sb)) {
@@ -1036,5 +1017,5 @@ createtags(const char *dbpath, const char *root)
 			fprintf(stderr, "GRTAGS_extra command failed: %s\n", strbuf_value(sb));
 		statistics_time_end(tim);
 	}
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 }

@@ -868,7 +868,7 @@ src2html(const char *src, const char *html, int notsource)
          * It is not source file.
          */
         if (notsource) {
-		STRBUF *sb = strbuf_open(0);
+		STRBUF *sb = strbuf_pool_assign(0);
 		const char *_;
 
 		fputs_nl(verbatim_begin, out);
@@ -878,7 +878,7 @@ src2html(const char *src, const char *html, int notsource)
 			detab_replacing(out, _, HTML_quoting);
 		}
 		fputs_nl(verbatim_end, out);
-		strbuf_close(sb);
+		strbuf_pool_release(sb);
         }
 	/*
 	 * It's source code.

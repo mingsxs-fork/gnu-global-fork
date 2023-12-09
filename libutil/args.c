@@ -252,7 +252,8 @@ preparse_options(int argc, char *const *argv)
 char **
 prepend_options(int *argc, char *const *argv, const char *options)
 {
-	STRBUF *sb = strbuf_open(0);
+	STATIC_STRBUF(sb);
+	strbuf_clear(sb);
 	const char *p, *opt = check_strdup(options);
 	int count = 1;
 	int quote = 0;
@@ -309,7 +310,7 @@ prepend_options(int *argc, char *const *argv, const char *options)
 char *
 serialize_options(int argc, char *const *argv)
 {
-	STRBUF *sb = strbuf_open(0);
+	STRBUF *sb = strbuf_pool_assign(0);
 	char *string = NULL;
 	char *p = NULL;
 	int i;
@@ -325,6 +326,6 @@ serialize_options(int argc, char *const *argv)
 		}
 	}
 	string = check_strdup(strbuf_value(sb));
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 	return string;
 }

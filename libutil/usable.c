@@ -85,7 +85,7 @@ usable(const char *command)
 	*path = 0;
 	/* Don't use fixed length buffer for environment variable
 	 * because it brings buffer overflow. */
-	sb = strbuf_open(0);
+	sb = strbuf_pool_assign(0);
 	strbuf_puts(sb, getenv("PATH"));
 	p = strbuf_value(sb);
 	while (p) {
@@ -105,7 +105,7 @@ usable(const char *command)
 #endif
 	}
 finish:
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 	return *path ? path : NULL;
 }
 /**

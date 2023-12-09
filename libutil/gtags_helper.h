@@ -27,6 +27,9 @@
 #else
 #include <strings.h>
 #endif
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
 #include "gparam.h"
 #include "gtagsop.h"
 
@@ -34,6 +37,20 @@ struct gtags_path {
 	char path[MAXPATHLEN];
 	const char *fid;
 	unsigned int seq;
+};
+
+struct gtags_path_proc_data {
+	GTOP *gtop[GTAGLIM];
+};
+
+struct gtags_path_add_data {
+	STRBUF *addlist;
+	STRBUF *dellist;
+	STRBUF *addlist_other;
+	IDSET *findset;
+	IDSET *delset;
+	struct stat *gtag_sb;
+	struct stat *path_sb;
 };
 
 struct gtags_conf {
@@ -49,13 +66,16 @@ struct gtags_conf {
 };
 
 struct gtags_priv_data {
-	unsigned int *gpath_handled;  /* global */
-	GTOP *gtop[GTAGLIM]; /* global */
-	struct gtags_path *gpath; /* on stack */
-	struct gtags_conf gconf;  /* global */
+	struct gtags_conf gconf;	/* gtags config, global */
+	struct gtags_path *gpath;	/* gtags path, on stack */
+	unsigned int *npath_done;	/* global */
+	/* private data used by handlers */
+	struct gtags_path_proc_data *proc_data;	/* proc path data, global */
+	struct gtags_path_add_data *add_data;	/* add path data, global */
 };
 
-int gtags_handle_path(const char *, void *);
+void gtags_proc_path(const char *, void *);
+void gtags_add_path(const char *, void *);
 void gtags_put_symbol(int , const char *, int , const char *, const char *, void *);
 
 #endif /* ! _GTAGS_HELPER_H_ */

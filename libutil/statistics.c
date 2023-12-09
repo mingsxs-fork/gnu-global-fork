@@ -124,7 +124,7 @@ void
 init_statistics(void)
 {
 	assert(sb == NULL);
-	sb = strbuf_open(0);
+	sb = strbuf_pool_assign(0);
 	T_all = statistics_time_start("The entire time");
 }
 
@@ -459,7 +459,7 @@ print_statistics(int style_no)
 	if (style->print_footer != NULL)
 		style->print_footer(priv);
 
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 	T_all = NULL;
 	sb = NULL;
 }

@@ -37,8 +37,6 @@
 #include "checkalloc.h"
 #include "tokenizer.h"
 #include "path.h"
-#include "path_tree.h"
-#include "gtagsop.h"
 #include "gtags_helper.h"
 
 static void C_family(const struct parser_param *, int);
@@ -46,7 +44,6 @@ static void process_attribute(const struct parser_param *);
 static int function_definition(const struct parser_param *, char *);
 static void condition_macro(const struct parser_param *, int);
 static int enumerator_list(const struct parser_param *);
-static void process_inc_headers(const struct parser_param *, const char *);
 
 #define IS_TYPE_QUALIFIER(c)	((c) == C_CONST || (c) == C_RESTRICT || (c) == C_VOLATILE)
 
@@ -60,21 +57,20 @@ static void process_inc_headers(const struct parser_param *, const char *);
 
 #define MAXPIFSTACK	100
 
-
 /* lang parser local env on stack */
 struct _lang_local {
 	struct _lang_stack {
 		short start;
 		short end;
 		short if0only;
-	} stack[MAXPIFSTACK];
+	} ifstack[MAXPIFSTACK];
 	struct _lang_stack *curstack;
 	int piflevel;
 	int level;
 	int externclevel;
 };
 
-TOKENIZER *tokenizer;  /* THIS tokenizer under parsing */
+static TOKENIZER *T = NULL; /* current tokenizer */
 
 /**
  * yacc: read yacc file and pickup tag entries.
@@ -132,8 +128,9 @@ C_family(const struct parser_param *param, int type)
 	int savelevel;
 	int startmacro, startsharp;
 	const char *interested = "{}=;";
-	STRBUF *sb = strbuf_open(0);
-	struct _lang_local local;
+	STRBUF *sb = strbuf_pool_assign(0);
+	struct _lang_local _local = {0};
+	struct _lang_local *local = &_local;
 	/*
 	 * yacc file format is like the following.
 	 *
@@ -147,33 +144,31 @@ C_family(const struct parser_param *param, int type)
 	int yaccstatus = (type == TYPE_YACC) ? DECLARATIONS : PROGRAMS;
 	int inC = (type == TYPE_YACC) ? 0 : 1;	/* 1 while C source */
 
-	memset(&local, 0, sizeof(local));
 	savelevel = -1;
 	startmacro = startsharp = 0;
 
-	if (!tokenizer_open(param->gpath, NULL, &local))
+	if ((T = tokenizer_open(param->gpath, NULL, local)) == NULL)
 		die("'%s' cannot open.", param->gpath->path);
-	tokenizer = current_tokenizer();  /* get current tokenizer for this file */
-	tokenizer->mode |= C_MODE;  /* allow token like '#xxx' */
-	tokenizer->crflag = 1;  /* require '\n' as a token */
+	T->mode |= C_MODE;  /* allow token like '#xxx' */
+	T->crflag = 1;  /* require '\n' as a token */
 	if (type == TYPE_YACC)
-		tokenizer->mode |= Y_MODE;  /* allow token like '%xxx' */
+		T->mode |= Y_MODE;  /* allow token like '%xxx' */
 
-	while ((cc = tokenizer->op->nexttoken(interested, c_reserved_word)) != EOF) {
+	while ((cc = T->op->nexttoken(interested, c_reserved_word)) != EOF) {
 		switch (cc) {
 		case SYMBOL:		/* symbol	*/
-			if (inC && tokenizer->op->peekchar(0) == '('/* ) */) {
-				if (param->isnotfunction(tokenizer->token)) {
-					PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
-				} else if (local.level > 0 || startmacro) {
-					PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
-				} else if (local.level == 0 && !startmacro && !startsharp) {
+			if (inC && T->op->peekchar(0) == '('/* ) */) {
+				if (param->isnotfunction(T->token)) {
+					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
+				} else if (local->level > 0 || startmacro) {
+					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
+				} else if (local->level == 0 && !startmacro && !startsharp) {
 					char arg1[MAXTOKEN], savetok[MAXTOKEN], *saveline;
-					int savelineno = tokenizer->lineno;
+					int savelineno = T->lineno;
 
-					strlimcpy(savetok, tokenizer->token, sizeof(savetok));
+					strlimcpy(savetok, T->token, sizeof(savetok));
 					strbuf_reset(sb);
-					strbuf_puts(sb, tokenizer->sp);
+					strbuf_puts(sb, T->sp);
 					saveline = strbuf_value(sb);
 					arg1[0] = '\0';
 					/*
@@ -199,83 +194,83 @@ C_family(const struct parser_param *param, int type)
 					}
 				}
 			} else {
-				PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+				PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 			}
 			break;
 		case '{':  /* } */
-			DBG_PRINT(local.level, "{"); /* } */
-			if (yaccstatus == RULES && local.level == 0)
+			DBG_PRINT(local->level, "{"); /* } */
+			if (yaccstatus == RULES && local->level == 0)
 				inC = 1;
-			++local.level;
-			if ((param->flags & PARSER_BEGIN_BLOCK) && cp_at_first(tokenizer)) {
-				if ((param->flags & PARSER_WARNING) && local.level != 1)
-					warning("forced level 1 block start by '{' at column 0 [+%d %s].", tokenizer->lineno, tokenizer->gpath->path); /* } */
-				local.level = 1;
+			++local->level;
+			if ((param->flags & PARSER_BEGIN_BLOCK) && cp_at_first(T)) {
+				if ((param->flags & PARSER_WARNING) && local->level != 1)
+					warning("forced level 1 block start by '{' at column 0 [+%d %s].", T->lineno, T->gpath->path); /* } */
+				local->level = 1;
 			}
 			break;
 			/* { */
 		case '}':
-			if (--local.level < 0) {
-				if (local.externclevel > 0)
-					local.externclevel--;
+			if (--local->level < 0) {
+				if (local->externclevel > 0)
+					local->externclevel--;
 				else if (param->flags & PARSER_WARNING)
-					warning("missing left '{' [+%d %s].", tokenizer->lineno, tokenizer->gpath->path); /* } */
-				local.level = 0;
+					warning("missing left '{' [+%d %s].", T->lineno, T->gpath->path); /* } */
+				local->level = 0;
 			}
-			if ((param->flags & PARSER_END_BLOCK) && cp_at_first(tokenizer)) {
-				if ((param->flags & PARSER_WARNING) && local.level != 0) /* { */
-					warning("forced level 0 block end by '}' at column 0 [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
-				local.level = 0;
+			if ((param->flags & PARSER_END_BLOCK) && cp_at_first(T)) {
+				if ((param->flags & PARSER_WARNING) && local->level != 0) /* { */
+					warning("forced level 0 block end by '}' at column 0 [+%d %s].", T->lineno, T->gpath->path);
+				local->level = 0;
 			}
-			if (yaccstatus == RULES && local.level == 0)
+			if (yaccstatus == RULES && local->level == 0)
 				inC = 0;
 			/* { */
-			DBG_PRINT(local.level, "}");
+			DBG_PRINT(local->level, "}");
 			break;
 		case '\n':
-			if (startmacro && local.level != savelevel) {
+			if (startmacro && local->level != savelevel) {
 				if (param->flags & PARSER_WARNING)
-					warning("different level before and after #define macro. reseted. [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
-				local.level = savelevel;
+					warning("different level before and after #define macro. reseted. [+%d %s].", T->lineno, T->gpath->path);
+				local->level = savelevel;
 			}
 			startmacro = startsharp = 0;
 			break;
 		case YACC_SEP:		/* %% */
-			if (local.level != 0) {
+			if (local->level != 0) {
 				if (param->flags & PARSER_WARNING)
-					warning("forced level 0 block end by '%%' [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
-				local.level = 0;
+					warning("forced level 0 block end by '%%' [+%d %s].", T->lineno, T->gpath->path);
+				local->level = 0;
 			}
 			if (yaccstatus == DECLARATIONS) {
-				PUT(PARSER_DEF, "yyparse", tokenizer->lineno, tokenizer->sp);
+				PUT(PARSER_DEF, "yyparse", T->lineno, T->sp);
 				yaccstatus = RULES;
 			} else if (yaccstatus == RULES)
 				yaccstatus = PROGRAMS;
 			inC = (yaccstatus == PROGRAMS) ? 1 : 0;
 			break;
 		case YACC_BEGIN:	/* %{ */
-			if (local.level != 0) {
+			if (local->level != 0) {
 				if (param->flags & PARSER_WARNING)
-					warning("forced level 0 block end by '%%{' [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
-				local.level = 0;
+					warning("forced level 0 block end by '%%{' [+%d %s].", T->lineno, T->gpath->path);
+				local->level = 0;
 			}
 			if (inC == 1 && (param->flags & PARSER_WARNING))
-				warning("'%%{' appeared in C mode. [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
+				warning("'%%{' appeared in C mode. [+%d %s].", T->lineno, T->gpath->path);
 			inC = 1;
 			break;
 		case YACC_END:		/* %} */
-			if (local.level != 0) {
+			if (local->level != 0) {
 				if (param->flags & PARSER_WARNING)
-					warning("forced level 0 block end by '%%}' [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
-				local.level = 0;
+					warning("forced level 0 block end by '%%}' [+%d %s].", T->lineno, T->gpath->path);
+				local->level = 0;
 			}
 			if (inC == 0 && (param->flags & PARSER_WARNING))
-				warning("'%%}' appeared in Yacc mode. [+%d %s].", tokenizer->lineno, tokenizer->gpath->path);
+				warning("'%%}' appeared in Yacc mode. [+%d %s].", T->lineno, T->gpath->path);
 			inC = 0;
 			break;
 		case YACC_UNION:	/* %union {...} */
 			if (yaccstatus == DECLARATIONS)
-				PUT(PARSER_DEF, "YYSTYPE", tokenizer->lineno, tokenizer->sp);
+				PUT(PARSER_DEF, "YYSTYPE", T->lineno, T->sp);
 			break;
 		/*
 		 * #xxx
@@ -283,35 +278,24 @@ C_family(const struct parser_param *param, int type)
 		case SHARP_DEFINE:
 		case SHARP_UNDEF:
 			startmacro = 1;
-			savelevel = local.level;
-			if ((c = tokenizer->op->nexttoken(interested, c_reserved_word)) != SYMBOL) {
-				tokenizer->op->pushbacktoken();
+			savelevel = local->level;
+			if ((c = T->op->nexttoken(interested, c_reserved_word)) != SYMBOL) {
+				T->op->pushbacktoken();
 				break;
 			}
-			if (tokenizer->op->peekchar(1) == '('/* ) */) {
-				PUT(PARSER_DEF, tokenizer->token, tokenizer->lineno, tokenizer->sp);
-				while ((c = tokenizer->op->nexttoken("()", c_reserved_word)) != EOF && c != '\n' && c != /* ( */ ')')
+			if (T->op->peekchar(1) == '('/* ) */) {
+				PUT(PARSER_DEF, T->token, T->lineno, T->sp);
+				while ((c = T->op->nexttoken("()", c_reserved_word)) != EOF && c != '\n' && c != /* ( */ ')')
 					if (c == SYMBOL)
-						PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+						PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 				if (c == '\n')
-					tokenizer->op->pushbacktoken();
+					T->op->pushbacktoken();
 			} else {
-				PUT(PARSER_DEF, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+				PUT(PARSER_DEF, T->token, T->lineno, T->sp);
 			}
 			break;
 		case SHARP_INCLUDE:
 		case SHARP_INCLUDE_NEXT:
-#if 0
-			if (!((struct gtags_priv_data *)param->arg)->gconf.incremental) { /* TODO, not doing this for incremental mode */
-				/* process included headers */
-				strbuf_clear(sb);
-				/* skip to certain charset */
-				(void)tokenizer->op->expectcharset("\"<", NULL);
-				if ((c = tokenizer->op->expectcharset("\">", sb)) != EOF && c != '\n')
-					process_inc_headers(param, strbuf_value(sb));
-				break;
-			}
-#endif
 		case SHARP_IMPORT:
 		case SHARP_ERROR:
 		case SHARP_LINE:
@@ -319,7 +303,7 @@ C_family(const struct parser_param *param, int type)
 		case SHARP_WARNING:
 		case SHARP_IDENT:
 		case SHARP_SCCS:
-			while ((c = tokenizer->op->nexttoken(interested, c_reserved_word)) != EOF && c != '\n')
+			while ((c = T->op->nexttoken(interested, c_reserved_word)) != EOF && c != '\n')
 				;
 			break;
 		case SHARP_IFDEF:
@@ -331,43 +315,43 @@ C_family(const struct parser_param *param, int type)
 			condition_macro(param, cc);
 			break;
 		case SHARP_SHARP:		/* ## */
-			(void)tokenizer->op->nexttoken(interested, c_reserved_word);
+			(void)T->op->nexttoken(interested, c_reserved_word);
 			break;
 		case C_EXTERN: /* for 'extern "C"/"C++"' */
-			if (tokenizer->op->peekchar(0) != '"') /* " */
+			if (T->op->peekchar(0) != '"') /* " */
 				continue; /* If does not start with '"', continue. */
-			while ((c = tokenizer->op->nexttoken(interested, c_reserved_word)) == '\n')
+			while ((c = T->op->nexttoken(interested, c_reserved_word)) == '\n')
 				;
 			/*
 			 * 'extern "C"/"C++"' block is a kind of namespace block.
 			 * (It doesn't have any influence on level.)
 			 */
 			if (c == '{') /* } */
-				local.externclevel++;
+				local->externclevel++;
 			else
-				tokenizer->op->pushbacktoken();
+				T->op->pushbacktoken();
 			break;
 		case C_STRUCT:
 		case C_ENUM:
 		case C_UNION:
-			while ((c = tokenizer->op->nexttoken(interested, c_reserved_word)) == C___ATTRIBUTE__)
+			while ((c = T->op->nexttoken(interested, c_reserved_word)) == C___ATTRIBUTE__)
 				process_attribute(param);
 			while (c == '\n')
-				c = tokenizer->op->nexttoken(interested, c_reserved_word);
+				c = T->op->nexttoken(interested, c_reserved_word);
 			if (c == SYMBOL) {
-				if (tokenizer->op->peekchar(0) == '{') /* } */ {
-					PUT(PARSER_DEF, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+				if (T->op->peekchar(0) == '{') /* } */ {
+					PUT(PARSER_DEF, T->token, T->lineno, T->sp);
 				} else {
-					PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 				}
-				c = tokenizer->op->nexttoken(interested, c_reserved_word);
+				c = T->op->nexttoken(interested, c_reserved_word);
 			}
 			while (c == '\n')
-				c = tokenizer->op->nexttoken(interested, c_reserved_word);
+				c = T->op->nexttoken(interested, c_reserved_word);
 			if (c == '{' /* } */ && cc == C_ENUM) {
 				enumerator_list(param);
 			} else {
-				tokenizer->op->pushbacktoken();
+				T->op->pushbacktoken();
 			}
 			break;
 		/* control statement check */
@@ -383,8 +367,8 @@ C_family(const struct parser_param *param, int type)
 		case C_RETURN:
 		case C_SWITCH:
 		case C_WHILE:
-			if ((param->flags & PARSER_WARNING) && !startmacro && local.level == 0)
-				warning("Out of function. %8s [+%d %s]", tokenizer->token, tokenizer->lineno, tokenizer->gpath->path);
+			if ((param->flags & PARSER_WARNING) && !startmacro && local->level == 0)
+				warning("Out of function. %8s [+%d %s]", T->token, T->lineno, T->gpath->path);
 			break;
 		case C_TYPEDEF:
 			{
@@ -394,44 +378,44 @@ C_family(const struct parser_param *param, int type)
 				 */
 				char savetok[MAXTOKEN];
 				int savelineno = 0;
-				int typedef_savelevel = local.level;
+				int typedef_savelevel = local->level;
 
 				savetok[0] = 0;
 
 				/* skip type qualifiers */
 				do {
-					c = tokenizer->op->nexttoken("{}(),;", c_reserved_word);
+					c = T->op->nexttoken("{}(),;", c_reserved_word);
 				} while (IS_TYPE_QUALIFIER(c) || c == '\n');
 
 				if ((param->flags & PARSER_WARNING) && c == EOF) {
-					warning("unexpected eof. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
+					warning("unexpected eof. [+%d %s]", T->lineno, T->gpath->path);
 					break;
 				} else if (c == C_ENUM || c == C_STRUCT || c == C_UNION) {
 					char *interest_enum = "{},;";
 					int c_ = c;
 
-					while ((c = tokenizer->op->nexttoken(interest_enum, c_reserved_word)) == C___ATTRIBUTE__)
+					while ((c = T->op->nexttoken(interest_enum, c_reserved_word)) == C___ATTRIBUTE__)
 						process_attribute(param);
 					while (c == '\n')
-						c = tokenizer->op->nexttoken(interest_enum, c_reserved_word);
+						c = T->op->nexttoken(interest_enum, c_reserved_word);
 					/* read tag name if exist */
 					if (c == SYMBOL) {
-						if (tokenizer->op->peekchar(0) == '{') /* } */ {
-							PUT(PARSER_DEF, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+						if (T->op->peekchar(0) == '{') /* } */ {
+							PUT(PARSER_DEF, T->token, T->lineno, T->sp);
 						} else {
-							PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+							PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 						}
-						c = tokenizer->op->nexttoken(interest_enum, c_reserved_word);
+						c = T->op->nexttoken(interest_enum, c_reserved_word);
 					}
 					while (c == '\n')
-						c = tokenizer->op->nexttoken(interest_enum, c_reserved_word);
+						c = T->op->nexttoken(interest_enum, c_reserved_word);
 					if (c_ == C_ENUM) {
 						if (c == '{') /* } */
 							c = enumerator_list(param);
 						else
-							tokenizer->op->pushbacktoken();
+							T->op->pushbacktoken();
 					} else {
-						for (; c != EOF; c = tokenizer->op->nexttoken(interest_enum, c_reserved_word)) {
+						for (; c != EOF; c = T->op->nexttoken(interest_enum, c_reserved_word)) {
 							switch (c) {
 							case SHARP_IFDEF:
 							case SHARP_IFNDEF:
@@ -444,38 +428,38 @@ C_family(const struct parser_param *param, int type)
 							default:
 								break;
 							}
-							if (c == ';' && local.level == typedef_savelevel) {
+							if (c == ';' && local->level == typedef_savelevel) {
 								if (savetok[0]) {
-									PUT(PARSER_DEF, savetok, savelineno, tokenizer->sp);
+									PUT(PARSER_DEF, savetok, savelineno, T->sp);
 									savetok[0] = 0;
 								}
 								break;
 							} else if (c == '{')
-								local.level++;
+								local->level++;
 							else if (c == '}') {
 								savetok[0] = 0;
-								if (--local.level == typedef_savelevel)
+								if (--local->level == typedef_savelevel)
 									break;
 							} else if (c == SYMBOL) {
-								if (local.level > typedef_savelevel)
-									PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+								if (local->level > typedef_savelevel)
+									PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 								/* save lastest token */
-								strlimcpy(savetok, tokenizer->token, sizeof(savetok));
-								savelineno = tokenizer->lineno;
+								strlimcpy(savetok, T->token, sizeof(savetok));
+								savelineno = T->lineno;
 							}
 						}
 						if (c == ';')
 							break;
 					}
 					if ((param->flags & PARSER_WARNING) && c == EOF) {
-						warning("unexpected eof. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
+						warning("unexpected eof. [+%d %s]", T->lineno, T->gpath->path);
 						break;
 					}
 				} else if (c == SYMBOL) {
-					PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 				}
 				savetok[0] = 0;
-				while ((c = tokenizer->op->nexttoken("(),;", c_reserved_word)) != EOF) {
+				while ((c = T->op->nexttoken("(),;", c_reserved_word)) != EOF) {
 					switch (c) {
 					case SHARP_IFDEF:
 					case SHARP_IFNDEF:
@@ -489,35 +473,35 @@ C_family(const struct parser_param *param, int type)
 						break;
 					}
 					if (c == '(')
-						local.level++;
+						local->level++;
 					else if (c == ')')
-						local.level--;
+						local->level--;
 					else if (c == SYMBOL) {
-						if (local.level > typedef_savelevel) {
-							PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+						if (local->level > typedef_savelevel) {
+							PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 						} else {
 							/* put latest token if any */
 							if (savetok[0]) {
-								PUT(PARSER_REF_SYM, savetok, savelineno, tokenizer->sp);
+								PUT(PARSER_REF_SYM, savetok, savelineno, T->sp);
 							}
 							/* save lastest token */
-							strlimcpy(savetok, tokenizer->token, sizeof(savetok));
-							savelineno = tokenizer->lineno;
+							strlimcpy(savetok, T->token, sizeof(savetok));
+							savelineno = T->lineno;
 						}
 					} else if (c == ',' || c == ';') {
 						if (savetok[0]) {
-							PUT(PARSER_DEF, savetok, tokenizer->lineno, tokenizer->sp);
+							PUT(PARSER_DEF, savetok, T->lineno, T->sp);
 							savetok[0] = 0;
 						}
 					}
-					if (local.level == typedef_savelevel && c == ';')
+					if (local->level == typedef_savelevel && c == ';')
 						break;
 				}
 				if (param->flags & PARSER_WARNING) {
 					if (c == EOF)
-						warning("unexpected eof. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
-					else if (local.level != typedef_savelevel)
-						warning("unmatched () block. (last at level %d.)[+%d %s]", local.level, tokenizer->lineno, tokenizer->gpath->path);
+						warning("unexpected eof. [+%d %s]", T->lineno, T->gpath->path);
+					else if (local->level != typedef_savelevel)
+						warning("unmatched () block. (last at level %d.)[+%d %s]", local->level, T->lineno, T->gpath->path);
 				}
 			}
 			break;
@@ -528,17 +512,16 @@ C_family(const struct parser_param *param, int type)
 			break;
 		}
 	}
-	strbuf_close(sb);
 	if (param->flags & PARSER_WARNING) {
-		if (local.level != 0)
-			warning("unmatched {} block. (last at level %d.)[+%d %s]", local.level, tokenizer->lineno, tokenizer->gpath->path);
-		if (local.piflevel != 0)
-			warning("unmatched #if block. (last at level %d.)[+%d %s]", local.piflevel, tokenizer->lineno, tokenizer->gpath->path);
+		if (local->level != 0)
+			warning("unmatched {} block. (last at level %d.)[+%d %s]", local->level, T->lineno, T->gpath->path);
+		if (local->piflevel != 0)
+			warning("unmatched #if block. (last at level %d.)[+%d %s]", local->piflevel, T->lineno, T->gpath->path);
 	}
+	strbuf_pool_release(sb);
 	/* close current tokenizer */
-	tokenizer_close(tokenizer);
-	/* reset current tokenizer */
-	tokenizer = current_tokenizer();
+	tokenizer_close(T);
+	T = NULL;
 }
 /**
  * process_attribute: skip attributes in '__attribute__((...))'.
@@ -552,13 +535,13 @@ process_attribute(const struct parser_param *param)
 	 * Skip '...' in __attribute__((...))
 	 * but pick up symbols in it.
 	 */
-	while ((c = tokenizer->op->nexttoken("()", c_reserved_word)) != EOF) {
+	while ((c = T->op->nexttoken("()", c_reserved_word)) != EOF) {
 		if (c == '(')
 			brace++;
 		else if (c == ')')
 			brace--;
 		else if (c == SYMBOL) {
-			PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+			PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 		}
 		if (brace == 0)
 			break;
@@ -579,7 +562,7 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 	int accept_arg1 = 0;
 
 	brace_level = isdefine = 0;
-	while ((c = tokenizer->op->nexttoken("()", c_reserved_word)) != EOF) {
+	while ((c = T->op->nexttoken("()", c_reserved_word)) != EOF) {
 		switch (c) {
 		case SHARP_IFDEF:
 		case SHARP_IFNDEF:
@@ -602,15 +585,15 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 		if (c == SYMBOL) {
 			if (accept_arg1 == 0) {
 				accept_arg1 = 1;
-				strlimcpy(arg1, tokenizer->token, MAXTOKEN);
+				strlimcpy(arg1, T->token, MAXTOKEN);
 			}
-			PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+			PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 		}
 	}
 	if (c == EOF)
 		return 0;
 	brace_level = 0;
-	while ((c = tokenizer->op->nexttoken(",;[](){}=", c_reserved_word)) != EOF) {
+	while ((c = T->op->nexttoken(",;[](){}=", c_reserved_word)) != EOF) {
 		switch (c) {
 		case SHARP_IFDEF:
 		case SHARP_IFNDEF:
@@ -624,7 +607,7 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 			process_attribute(param);
 			continue;
 		case SHARP_DEFINE:
-			tokenizer->op->pushbacktoken();
+			T->op->pushbacktoken();
 			return 0;
 		default:
 			break;
@@ -634,13 +617,13 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 		else if (c == /* ( */')' || c == ']')
 			brace_level--;
 		else if (brace_level == 0
-		    && ((c == SYMBOL && strcmp(tokenizer->token, "__THROW")) || IS_RESERVED_WORD(c)))
+		    && ((c == SYMBOL && strcmp(T->token, "__THROW")) || IS_RESERVED_WORD(c)))
 			isdefine = 1;
 		else if (c == ';' || c == ',') {
 			if (!isdefine)
 				break;
 		} else if (c == '{' /* } */) {
-			tokenizer->op->pushbacktoken();
+			T->op->pushbacktoken();
 			return 1;
 		} else if (c == /* { */'}')
 			break;
@@ -649,7 +632,7 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 
 		/* pick up symbol */
 		if (c == SYMBOL)
-			PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+			PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 	}
 	return 0;
 }
@@ -663,53 +646,54 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 static void
 condition_macro(const struct parser_param *param, int cc)
 {
-	struct _lang_local *plocal = tokenizer->lang_priv;
-	plocal->curstack = &plocal->stack[plocal->piflevel];
+	struct _lang_local *local = T->lang_priv;
+
+	local->curstack = &local->ifstack[local->piflevel];
 	if (cc == SHARP_IFDEF || cc == SHARP_IFNDEF || cc == SHARP_IF) {
-		DBG_PRINT(plocal->piflevel, "#if");
-		if (++plocal->piflevel >= MAXPIFSTACK)
-			die("#if stack over flow. [%s]", tokenizer->gpath->path);
-		++plocal->curstack;
-		plocal->curstack->start = plocal->level;
-		plocal->curstack->end = -1;
-		plocal->curstack->if0only = 0;
-		if (tokenizer->op->peekchar(0) == '0')
-			plocal->curstack->if0only = 1;
-		else if ((cc = tokenizer->op->nexttoken(NULL, c_reserved_word)) == SYMBOL && !strcmp(tokenizer->token, "notdef"))
-			plocal->curstack->if0only = 1;
+		DBG_PRINT(local->piflevel, "#if");
+		if (++local->piflevel >= MAXPIFSTACK)
+			die("#if stack over flow. [%s]", T->gpath->path);
+		++local->curstack;
+		local->curstack->start = local->level;
+		local->curstack->end = -1;
+		local->curstack->if0only = 0;
+		if (T->op->peekchar(0) == '0')
+			local->curstack->if0only = 1;
+		else if ((cc = T->op->nexttoken(NULL, c_reserved_word)) == SYMBOL && !strcmp(T->token, "notdef"))
+			local->curstack->if0only = 1;
 		else
-			tokenizer->op->pushbacktoken();
+			T->op->pushbacktoken();
 	} else if (cc == SHARP_ELIF || cc == SHARP_ELSE) {
-		DBG_PRINT(plocal->piflevel - 1, "#else");
-		if (plocal->curstack->end == -1)
-			plocal->curstack->end = plocal->level;
-		else if (plocal->curstack->end != plocal->level && (param->flags & PARSER_WARNING))
-			warning("uneven level. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
-		plocal->level = plocal->curstack->start;
-		plocal->curstack->if0only = 0;
+		DBG_PRINT(local->piflevel - 1, "#else");
+		if (local->curstack->end == -1)
+			local->curstack->end = local->level;
+		else if (local->curstack->end != local->level && (param->flags & PARSER_WARNING))
+			warning("uneven level. [+%d %s]", T->lineno, T->gpath->path);
+		local->level = local->curstack->start;
+		local->curstack->if0only = 0;
 	} else if (cc == SHARP_ENDIF) {
 		int minus = 0;
-		if (--plocal->piflevel < 0) {
+		if (--local->piflevel < 0) {
 			minus = 1;
-			plocal->piflevel = 0;
+			local->piflevel = 0;
 		}
-		DBG_PRINT(plocal->piflevel, "#endif");
+		DBG_PRINT(local->piflevel, "#endif");
 		if (minus) {
 			if (param->flags & PARSER_WARNING)
-				warning("unmatched #if block. reseted. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
+				warning("unmatched #if block. reseted. [+%d %s]", T->lineno, T->gpath->path);
 		} else {
-			if (plocal->curstack->if0only)
-				plocal->level = plocal->curstack->start;
-			else if (plocal->curstack->end != -1) {
-				if (plocal->curstack->end != plocal->level && (param->flags & PARSER_WARNING))
-					warning("uneven level. [+%d %s]", tokenizer->lineno, tokenizer->gpath->path);
-				plocal->level = plocal->curstack->end;
+			if (local->curstack->if0only)
+				local->level = local->curstack->start;
+			else if (local->curstack->end != -1) {
+				if (local->curstack->end != local->level && (param->flags & PARSER_WARNING))
+					warning("uneven level. [+%d %s]", T->lineno, T->gpath->path);
+				local->level = local->curstack->end;
 			}
 		}
 	}
-	while ((cc = tokenizer->op->nexttoken(NULL, c_reserved_word)) != EOF && cc != '\n') {
-		if (cc == SYMBOL && strcmp(tokenizer->token, "defined") != 0)
-			PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+	while ((cc = T->op->nexttoken(NULL, c_reserved_word)) != EOF && cc != '\n') {
+		if (cc == SYMBOL && strcmp(T->token, "defined") != 0)
+			PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 	}
 }
 
@@ -719,12 +703,12 @@ condition_macro(const struct parser_param *param, int cc)
 static int
 enumerator_list(const struct parser_param *param)
 {
-	struct _lang_local *plocal = tokenizer->lang_priv;
-	int savelevel = plocal->level;
+	struct _lang_local *local = T->lang_priv;
+	int savelevel = local->level;
 	int in_expression = 0;
 	int c = '{';
 
-	for (; c != EOF; c = tokenizer->op->nexttoken("{}(),=", c_reserved_word)) {
+	for (; c != EOF; c = T->op->nexttoken("{}(),=", c_reserved_word)) {
 		switch (c) {
 		case SHARP_IFDEF:
 		case SHARP_IFNDEF:
@@ -736,21 +720,21 @@ enumerator_list(const struct parser_param *param)
 			break;
 		case SYMBOL:
 			if (in_expression)
-				PUT(PARSER_REF_SYM, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+				PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 			else
-				PUT(PARSER_DEF, tokenizer->token, tokenizer->lineno, tokenizer->sp);
+				PUT(PARSER_DEF, T->token, T->lineno, T->sp);
 			break;
 		case '{':
 		case '(':
-			plocal->level++;
+			local->level++;
 			break;
 		case '}':
 		case ')':
-			if (--plocal->level == savelevel)
+			if (--local->level == savelevel)
 				return c;
 			break;
 		case ',':
-			if (plocal->level == savelevel + 1)
+			if (local->level == savelevel + 1)
 				in_expression = 0;
 			break;
 		case '=':
@@ -762,23 +746,4 @@ enumerator_list(const struct parser_param *param)
 	}
 
 	return c;
-}
-
-/**
- * process_inc_headers: process included headers, make them parsed firstly
- */
-void
-process_inc_headers(const struct parser_param *param, const char *header)
-{
-	const char *p = header + strlen(header);
-	char sep = '/';
-#if (defined(_WIN32) && !defined(__CYGWIN__)) || defined(__DJGPP__)
-	if (strchr(header, '\\') != NULL)
-		sep = '\\';
-#endif
-	/* reversely find the sep to get header filename */
-	while (p-- > header && *p != sep);
-	++p;
-	if (path_tree_search_name(p, gtags_handle_path, param->arg) != 0)
-		die("handle path tree search faield, gtags stopped.");
 }

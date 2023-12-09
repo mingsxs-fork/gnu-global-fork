@@ -68,7 +68,7 @@ opentoken(const char *file)
 	 */
 	if ((ip = fopen(file, "rb")) == NULL)
 		return 0;
-	ib = strbuf_open(MAXBUFLEN);
+	ib = strbuf_pool_assign(MAXBUFLEN);
 	strlimcpy(curfile, file, sizeof(curfile));
 	sp = cp = lp = NULL; ptok[0] = '\0'; lineno = 0;
 	crflag = cmode = cppmode = ymode = 0;
@@ -81,7 +81,7 @@ opentoken(const char *file)
 void
 closetoken(void)
 {
-	strbuf_close(ib);
+	strbuf_pool_release(ib);
 	fclose(ip);
 }
 

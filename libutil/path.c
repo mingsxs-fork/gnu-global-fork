@@ -220,7 +220,7 @@ makedirectories(const char *base, const char *rest, int verbose)
 		return -1;
 	if (!test("drw", base))
 		return -2;
-	sb = strbuf_open(0);
+	sb = strbuf_pool_assign(0);
 	strbuf_puts(sb, base);
 	if (*rest == SEP)
 		rest++;
@@ -235,14 +235,14 @@ makedirectories(const char *base, const char *rest, int verbose)
 			if (verbose)
 				fprintf(stderr, " Making directory '%s'.\n", p);
 			if (mkdir(p, 0775) < 0) {
-				strbuf_close(sb);
+				strbuf_pool_release(sb);
 				return -3;
 			}
 		}
 		if (*q == SEP)
 			q++;
 	}
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 	return 0;
 }
 /**

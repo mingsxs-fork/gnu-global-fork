@@ -45,19 +45,20 @@
 #undef SLIST_ENTRY
 #endif
 
+#include "gparam.h"
+#include "test.h"
+#include "likely.h"
+#include "strlimcpy.h"
+#include "die.h"
+#include "strbuf.h"
 #include "find.h"
+#include "strhash.h"
+#include "path.h"
 #include "makepath.h"
 #include "checkalloc.h"
-#include "path.h"
-#include "die.h"
-#include "strlimcpy.h"
-#include "test.h"
 #include "locatestring.h"
-#include "strbuf.h"
-#include "strhash.h"
 #include "gpathop.h"
 #include "path_tree.h"
-#include "likely.h"
 
 /*
  * use an appropriate string comparison for the file system; define the position of the root slash.
@@ -65,12 +66,10 @@
 #if defined(_WIN32) || defined(__DJGPP__)
 #define STRCMP stricmp
 #define STRNCMP strnicmp
-#define ROOT 2
 #define S_ISSOCK(mode) (0)
 #else
 #define STRCMP strcmp
 #define STRNCMP strncmp
-#define ROOT 0
 #endif
 
 #if (defined(_WIN32) && !defined(__CYGWIN__)) || defined(__DJGPP__)
@@ -100,11 +99,12 @@ extern int debug;  /* debug flag */
 #if 0
 static inline const char *basename(const char *);
 #endif
-static inline int check_path(const char *);
+static inline int check_path(const char *, struct stat *);
 static inline int unallowed_symlink(const char *);
-static void walk_free_path_tree(PATH_NODE *);
-static int walk_make_path_tree(VARRAY_LOC *, STRBUF *);
-static int walk_traverse_path_tree(PATH_NODE *, STRBUF *, int (*handler)(const char *, void *), void *);
+static void walk_close_path_tree(PATH_NODE *);
+static int walk_build_path_tree(VARRAY_LOC *, STRBUF *);
+static void walk_find_proc_path(STRBUF *, PATH_PROC, void *);
+static void walk_traverse_path_tree(PATH_NODE *, STRBUF *, PATH_PROC, void *);
 static inline void add_childpath(VARRAY_LOC *, const char *);
 static inline void update_name_bucket(VARRAY_LOC *);
 static const char *construct_path_from_leaf(VARRAY_LOC *);
@@ -112,7 +112,7 @@ static const char *commonprefix(const char *, const char *);
 
 
 int
-check_path(const char *fpath)
+check_path(const char *fpath, struct stat *stp)
 {
 	struct stat st, lst;
 	if (stat(fpath, &st) < 0) {
@@ -162,6 +162,8 @@ check_path(const char *fpath)
 			return 0;
 		}
 	}
+	if (stp)
+		memcpy(stp, &st, sizeof(struct stat));
 	return 1;
 }
 
@@ -174,7 +176,7 @@ unallowed_symlink(const char *dir)
 	if (!strcmp(dir, ".") || !strcmp(dir, "./"))
 		return 0;
 	if ((real = realpath(dir, NULL)) == NULL)
-		die("cannot get real path of '%s'.", trimpath(dir));
+		die("can't get real path of '%s'.", trimpath(dir));
 	/* dir is not a symlink */
 	if (locatestring(real, rootrealpath, MATCH_AT_FIRST) &&
 			locatestring(real, trimpath(dir), MATCH_AT_LAST))
@@ -222,14 +224,13 @@ update_name_bucket(VARRAY_LOC *loc)
 }
 
 int
-walk_make_path_tree(VARRAY_LOC *loc, STRBUF *sb)
+walk_build_path_tree(VARRAY_LOC *loc, STRBUF *sb)
 {
 	DIR *dirp;
 	struct dirent *dp;
 	struct stat st;
 	VARRAY_LOC childloc;
 	VARRAY *childpaths;
-	int ret;
 
 	const char *fpath = strbuf_value(sb);
 	if ((dirp = opendir(fpath)) == NULL) {
@@ -241,16 +242,14 @@ walk_make_path_tree(VARRAY_LOC *loc, STRBUF *sb)
 		if (ignore_path(dp->d_name))
 			continue; /* ignore this file */
 		strbuf_puts(sb, dp->d_name);
-		if (check_path(strbuf_value(sb))) {
-			(void)stat(strbuf_value(sb), &st);
+		if (check_path(strbuf_value(sb), &st)) {
 			if (S_ISDIR(st.st_mode) || S_ISREG(st.st_mode)) {
 				add_childpath(loc, dp->d_name);
 				childpaths = VBLOC2ADDR(loc)->childpaths;
 				childloc.vb = childpaths;
 				childloc.index = childpaths->length - 1;
 				if (S_ISDIR(st.st_mode)) {	/* directory */
-					if ((ret = walk_make_path_tree(&childloc, sb)) != 0)
-						return ret;
+					(void)walk_build_path_tree(&childloc, sb);
 				} else {	/* regular file */
 					total_accepted_paths += 1;  /* accept all regular files */
 					update_name_bucket(&childloc);
@@ -261,19 +260,18 @@ walk_make_path_tree(VARRAY_LOC *loc, STRBUF *sb)
 	}
 	(void)closedir(dirp);
 	strbuf_rtruncate(sb, 1);  /* truncate SEP */
-	return 0;  /* current directory build done */
 }
 
 void
-make_path_tree(const char *start)
+path_tree_build(const char *start)
 {
-	STRBUF *sb = strbuf_open(0);
+	STRBUF *sb = strbuf_pool_assign(MAXPATHLEN);
 	VARRAY *vb;
 	if (!start)
 		start = ".";  /* default root path */
 	if ((rootrealpath = realpath(start, NULL)) == NULL)
 		die("can't get real path of root path '%s'.", trimpath(start));
-	if (!check_path(start))
+	if (!check_path(start, NULL))
 		die("check root path failed: %s", trimpath(start));
 	if (!rootpath) {
 		vb = varray_open(sizeof(PATH_NODE), 1);
@@ -290,18 +288,18 @@ make_path_tree(const char *start)
 	}
 	/* start building path tree recursively from rootdir */
 	strbuf_puts(sb, start);
-	if (walk_make_path_tree(&rootpathloc, sb) < 0) {
-		free_path_tree();
+	if (walk_build_path_tree(&rootpathloc, sb) < 0) {
+		path_tree_close();
 		die("recursively build path tree failed.");
 	}
 	/* allocate memory for parse states */
 	if (!file_parse_states)
 		file_parse_states = check_calloc(sizeof(char), total_accepted_paths);
-	strbuf_close(sb);
+	strbuf_pool_release(sb);
 }
 
 void
-walk_free_path_tree(PATH_NODE *path)
+walk_close_path_tree(PATH_NODE *path)
 {
 	PATH_NODE *childpath;
 	struct sh_entry *entry;
@@ -320,17 +318,17 @@ walk_free_path_tree(PATH_NODE *path)
 		vb = path->childpaths;
 		for (int i = 0; i < vb->length; i++) {
 			childpath = varray_assign(vb, i, 0);
-			walk_free_path_tree(childpath);
+			walk_close_path_tree(childpath);
 		}
 		varray_close(vb); /* close current childpaths varray */
 	}
 }
 
 void
-free_path_tree(void)
+path_tree_close(void)
 {
 	if (rootpath) {
-		walk_free_path_tree(rootpath);
+		walk_close_path_tree(rootpath);
 		varray_close(rootpathloc.vb);  /* only rootpath node is allocated here */
 		memset(&rootpathloc, 0, sizeof(VARRAY_LOC));
 		rootpath = NULL;
@@ -349,39 +347,40 @@ free_path_tree(void)
 	}
 	/* reset total accepted paths */
 	total_accepted_paths = 0;
+	find_close();
 }
 
-int
-walk_traverse_path_tree(PATH_NODE *path, STRBUF *sb, int (*handler)(const char *, void *), void *data)
+void
+walk_traverse_path_tree(PATH_NODE *path, STRBUF *sb, PATH_PROC proc, void *data)
 {
 	VARRAY *vb;
 	PATH_NODE *childpath;
-	int ret;
 	if (path != rootpath) /* no root */
 		strbuf_putc(sb, SEP);
 	strbuf_puts(sb, path->name);
 	if (!path->childpaths) {  /* reach end of a path */
-		if (handler && (ret = handler(strbuf_value(sb), data)) != 0)
-			return ret;
+		proc(strbuf_value(sb), data);
 	} else { /* go deeper in the path tree */
 		vb = path->childpaths;
 		for (int i = 0; i < vb->length; i++) {
 			childpath = varray_assign(vb, i, 0);
-			walk_traverse_path_tree(childpath, sb, handler, data);
+			walk_traverse_path_tree(childpath, sb, proc, data);
 		}
 	}
 	strbuf_rtruncate(sb, strlen(path->name));
 	strbuf_rtruncate(sb, 1);
-	return 0;
 }
 
-int
-path_tree_traverse(int (*handler)(const char *, void *), void *data)
+void
+path_tree_traverse(PATH_PROC proc, void *data)
 {
 	STATIC_STRBUF(sb);
+	if (!rootpath)
+		die ("build path tree first.");
+	if (!proc)
+		die ("no proc is given.");
 	strbuf_clear(sb);
-	/* will return result from the callback gtags_handle_path function */
-	return walk_traverse_path_tree(rootpath, sb, handler, data);
+	walk_traverse_path_tree(rootpath, sb, proc, data);
 }
 
 const char *
@@ -400,25 +399,24 @@ construct_path_from_leaf(VARRAY_LOC *loc)
 	return strbuf_value(sb);
 }
 
-int
-path_tree_search_name(const char *name, int (*handler)(const char *, void *), void *data)
+void
+path_tree_search_name(const char *name, PATH_PROC proc, void *data)
 {
 	const char *fpath;
 	struct sh_entry *entry;
 	VARRAY *vb;
 	VARRAY_LOC *loc;
-	int ret;
+	if (!proc)
+		die("no proc is given.");
 	entry = strhash_assign(name_bucket, name, 0);
 	if (entry && entry->value) {
 		vb = entry->value;
 		for (int i = 0; i < vb->length; i++) {
 			loc = varray_assign(vb, i, 0);
 			fpath = construct_path_from_leaf(loc);
-			if (handler && (ret = handler(fpath, data)) != 0)
-				return ret;
+			proc(fpath, data);
 		}
 	}
-	return 0;
 }
 
 void
@@ -458,8 +456,171 @@ commonprefix(const char *p1, const char *p2)
 }
 
 int
-path_tree_no_handler(const char *path, void *data)
+path_tree_no_proc(const char *path, void *data)
 {
 	printf("%s\n", path);
 	return 0;
+}
+
+void
+walk_find_proc_path(STRBUF *sb, PATH_PROC proc, void *data)
+{
+	DIR *dirp;
+	struct dirent *dp;
+	struct stat st;
+	const char *fpath = strbuf_value(sb);
+	if ((dirp = opendir(fpath)) == NULL) {
+		warning("cannot open directory '%s'. ignored.", trimpath(fpath));
+		return;
+	}
+	strbuf_putc(sb, SEP);
+	while ((dp = readdir(dirp)) != NULL) {
+		if (ignore_path(dp->d_name))
+			continue; /* ignore this file */
+		strbuf_puts(sb, dp->d_name);
+		if (check_path(strbuf_value(sb), &st)) {
+			if (S_ISDIR(st.st_mode))
+				(void)walk_find_proc_path(sb, proc, data);
+			else if (S_ISREG(st.st_mode)) {
+				total_accepted_paths += 1;
+				/* handled found path */
+				(void)proc(strbuf_value(sb), data);
+			}
+		}
+		strbuf_rtruncate(sb, strlen(dp->d_name)); /* truncate dp->d_name */
+	}
+	(void)closedir(dirp);
+	strbuf_rtruncate(sb, 1);  /* truncate SEP */
+}
+
+void
+find_proc_path_all(const char *start, PATH_PROC proc, void *data)
+{
+	STRBUF *sb;
+	if (!proc)
+		die("no path handler, work given up.");
+	if (!start)
+		start = ".";
+	if (!check_path(start, NULL))
+		die("check root path failed: %s", trimpath(start));
+	if ((rootrealpath = realpath(start, NULL)) == NULL)
+		die("can't get real path of root path '%s'.", trimpath(start));
+	sb = strbuf_pool_assign(MAXPATHLEN);
+	strbuf_puts(sb, start);
+	walk_find_proc_path(sb, proc, data);
+	strbuf_pool_release(sb);
+	find_close();
+}
+
+void
+find_proc_filelist(const char *filename, const char *root, PATH_PROC proc, void *data)
+{
+	static FILE *temp = NULL;
+	STRBUF *ib = strbuf_pool_assign(0);
+	FILE *ip = NULL;
+	char buf[MAXPATHLEN + 2];
+	const char *path;
+	/* we reserve 2 bytes ahead for changing from absolute path to relative path */
+	char *real = &buf[2];
+	char *ploc;
+	int rootlen;
+
+	if (!proc)
+		die("no path handler, work given up.");
+
+	if (!strcmp(filename, "-")) {
+		/*
+		 * If the filename is '-', copy standard input onto
+		 * temporary file to be able to read repeatedly.
+		 */
+		if (temp == NULL) {
+			temp = tmpfile();
+			while (fgets(buf, sizeof(buf), stdin) != NULL)
+				fputs(buf, temp);
+		}
+		rewind(temp);
+		ip = temp;
+	} else {
+		ip = fopen(filename, "r");
+		if (ip == NULL)
+			die("cannot open '%s'.", trimpath(filename));
+	}
+
+	if ((rootrealpath = realpath(root, NULL)) == NULL)
+		die("can't get real path of root: %s.", root);
+	/*
+	 * The buf has room for one character ' ' in front.
+	 *
+	 * __buf
+	 * +---+---+---+---+   +---+
+	 * |' '|   |   |   .....   |
+	 * +---+---+---+---+   +---+
+	 *     ^
+	 *     buf
+	 *      <---  bufsize   --->
+	 */
+	strbuf_clear(ib);
+	memset(buf, 0, sizeof(buf));
+	rootlen = strlen(rootrealpath);
+	for (;;) {
+		path = strbuf_fgets(ib, ip, STRBUF_NOCRLF);
+		if (path == NULL) {
+			/* EOF */
+			break;
+		}
+		if (*path == '\0') {
+			/* skip empty line.  */
+			continue;
+		}
+		/*
+		 * Lines which start with ". " are considered to be comments.
+		 */
+		if (*path == '.' && *(path + 1) == ' ')
+			continue;
+		/*
+		 * Skip the following:
+		 * o directory
+		 * o file which does not exist
+		 * o dead symbolic link
+		 */
+		if (!test("f", path)) {
+			if (test("d", path))
+				warning("'%s' is a directory. ignored.", trimpath(path));
+			else
+				warning("'%s' not found. ignored.", trimpath(path));
+			continue;
+		}
+		/*
+		 * normalize path name.
+		 *
+		 *	rootdir  /a/b/
+		 *	buf      /a/b/c/d.c -> c/d.c -> ./c/d.c
+		 */
+		if (realpath(path, real) == NULL) {
+			warning("can't get real path of: %s, ignored.", path);
+			continue;
+		}
+		if ((ploc = locatestring(real, rootrealpath, MATCH_AT_FIRST)) == NULL)
+			continue;
+		if (*ploc-- != '/') {
+			*ploc-- = '/';
+		}
+		*ploc = '.';
+		path = ploc;
+		/*
+		 * Now GLOBAL can treat the path which includes blanks.
+		 * This message is obsoleted.
+		 */
+		if (!allow_blank && locatestring(path, " ", MATCH_LAST)) {
+			warning("'%s' ignored, because it includes blank.", trimpath(path));
+			continue;
+		}
+		if (skipthisfile(path))
+			continue;
+		/* handle path */
+		(void)proc(path, data);
+	}
+	fclose(ip);
+	strbuf_pool_release(ib);
+	find_close();
 }

@@ -37,6 +37,7 @@
 #include "path_tree.h"
 #include "gtags_helper.h"
 #include "strlimcpy.h"
+#include "idset.h"
 
 
 /**
@@ -48,7 +49,7 @@ void
 gtags_put_symbol(int type, const char *tag, int lno, const char *path, const char *line_image, void *data)
 {
 	const struct gtags_priv_data *priv_data = data;
-	GTOP *gtop;
+	GTOP *gtop = NULL;
 	const char *p;
 
 	/*
@@ -75,34 +76,36 @@ gtags_put_symbol(int type, const char *tag, int lno, const char *path, const cha
 	}
 	switch (type) {
 	case PARSER_DEF:
-		gtop = priv_data->gtop[GTAGS];
+		gtop = priv_data->proc_data->gtop[GTAGS];
 		break;
 	case PARSER_REF_SYM:
-		gtop = priv_data->gtop[GRTAGS];
-		if (gtop == NULL)
-			return;
+		gtop = priv_data->proc_data->gtop[GRTAGS];
 		break;
 	default:
 		return;
 	}
+	if (!gtop)
+		return ;
 	gtags_put_using(gtop, tag, lno, priv_data->gpath->fid, line_image);
 }
 
-int
-gtags_handle_path(const char *path, void *data)
+void
+gtags_proc_path(const char *path, void *data)
 {
 	static unsigned int seqno = 0;
 	struct gtags_priv_data *priv_data = data;
-	struct gtags_path gpath = {0};  /* current gpath on stack */
-	struct gtags_path *gpath_prev = priv_data->gpath; /* last gpath on stack */
+	struct gtags_path gpath;  /* current gpath on stack */
+//	struct gtags_path *gpath_prev = priv_data->gpath; /* last gpath on stack */
+#if 0
 	int parse_state = get_file_parse_state(path);
 	if (parse_state != FILE_PARSE_NEW)  /* file is under parsing */
 		goto safe_out;
+#endif
 	if (!issourcefile(path)) {
 		if (!test("b", path))
 			/* other file like 'Makefile', non-binary */
 			gpath_put(path, GPATH_OTHER);
-		goto safe_out;
+		return ;
 	}
 	strlimcpy(gpath.path, path, sizeof(gpath.path));
 	gpath_put(gpath.path, GPATH_SOURCE);
@@ -111,13 +114,53 @@ gtags_handle_path(const char *path, void *data)
 		die("GPATH is corrupted.('%s' not found)", gpath.path);
 	gpath.seq = ++seqno;
 	priv_data->gpath = &gpath;
-	set_file_parse_state(gpath.path, FILE_PARSE_PENDING);
+//	set_file_parse_state(gpath.path, FILE_PARSE_PENDING);
 	parse_file(&gpath, priv_data->gconf.parser_flags, gtags_put_symbol, data);
-	set_file_parse_state(gpath.path, FILE_PARSE_DONE);
-	priv_data->gpath = gpath_prev; /* restore gpath stack */
-	gtags_flush(priv_data->gtop[GTAGS]);
-	gtags_flush(priv_data->gtop[GRTAGS]);
-	(*priv_data->gpath_handled)++; /* update gpath counter */
-safe_out:
-	return 0;
+//	set_file_parse_state(gpath.path, FILE_PARSE_DONE);
+//	priv_data->gpath = gpath_prev; /* restore gpath stack */
+	gtags_flush(priv_data->proc_data->gtop[GTAGS], gpath.fid);
+	gtags_flush(priv_data->proc_data->gtop[GRTAGS], gpath.fid);
+	(*priv_data->npath_done)++; /* update gpath counter */
+}
+
+void
+gtags_add_path(const char *path, void *data)
+{
+	static unsigned int seqno = 0;
+	struct gtags_priv_data *priv_data = data;
+	struct gtags_path gpath;
+	struct stat path_sb, *sbp = priv_data->add_data->path_sb;
+	int other = 0, n_fid = 0;
+	if (!issourcefile(path)) {
+		if (!test("b", path))
+			return ;
+		other = 1;
+	}
+	if (sbp == NULL) {
+		if (stat(path, &path_sb) < 0)
+			die("stat failed when adding path: %s.", path);
+		sbp = &path_sb;
+	}
+	strlimcpy(gpath.path, path, sizeof(gpath.path));
+	priv_data->gpath = &gpath;
+	gpath.fid = gpath_path2fid(gpath.path, NULL);
+	if (gpath.fid) {
+		n_fid = atoi(gpath.fid);
+		idset_add(priv_data->add_data->findset, n_fid);
+	}
+	if (other) {
+		if (gpath.fid == NULL)
+			strbuf_puts0(priv_data->add_data->addlist_other, gpath.path);
+	} else {
+		if (gpath.fid == NULL){
+			strbuf_puts0(priv_data->add_data->addlist, gpath.path);
+			(*priv_data->npath_done)++;
+			gpath.seq = ++seqno;
+		} else if (priv_data->add_data->gtag_sb->st_mtime < sbp->st_mtime) {
+			strbuf_puts0(priv_data->add_data->addlist, gpath.path);
+			idset_add(priv_data->add_data->delset, n_fid);
+			(*priv_data->npath_done)++;
+			gpath.seq = ++seqno;
+		}
+	}
 }

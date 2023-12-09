@@ -2705,7 +2705,7 @@ php(const struct parser_param *param)
 	int token;
 
 	level = 0;
-	string = strbuf_open(0);
+	string = strbuf_pool_assign(0);
 	if (linetable_open(param->gpath->path) == -1)
 		die("'%s' cannot open.", param->gpath->path);
 
@@ -2779,6 +2779,6 @@ php(const struct parser_param *param)
 		}
 	}
 	linetable_close();
-	strbuf_close(string);
+	strbuf_pool_release(string);
 }
 
