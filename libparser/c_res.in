@@ -32,6 +32,7 @@ _Imaginary				word
 _Noreturn				word
 _Static_assert				word
 _Thread_local,__thread			word
+__THROW			word
 auto			word
 break			word
 case			word

@@ -379,6 +379,7 @@ C_family(const struct parser_param *param, int type)
 				char savetok[MAXTOKEN];
 				int savelineno = 0;
 				int typedef_savelevel = local->level;
+				int expect_funcptr;
 
 				savetok[0] = 0;
 
@@ -391,7 +392,7 @@ C_family(const struct parser_param *param, int type)
 					warning("unexpected eof. [+%d %s]", T->lineno, T->gpath->path);
 					break;
 				} else if (c == C_ENUM || c == C_STRUCT || c == C_UNION) {
-					char *interest_enum = "{},;";
+					const char *interest_enum = "{},;";
 					int c_ = c;
 
 					while ((c = T->op->nexttoken(interest_enum, c_reserved_word)) == C___ATTRIBUTE__)
@@ -459,7 +460,7 @@ C_family(const struct parser_param *param, int type)
 					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 				}
 				savetok[0] = 0;
-				while ((c = T->op->nexttoken("(),;", c_reserved_word)) != EOF) {
+				while ((c = T->op->nexttoken("(),;*", c_reserved_word)) != EOF) {
 					switch (c) {
 					case SHARP_IFDEF:
 					case SHARP_IFNDEF:
@@ -472,13 +473,20 @@ C_family(const struct parser_param *param, int type)
 					default:
 						break;
 					}
+
+					if (c != SYMBOL)
+						expect_funcptr = 0;
+
 					if (c == '(')
 						local->level++;
 					else if (c == ')')
 						local->level--;
 					else if (c == SYMBOL) {
 						if (local->level > typedef_savelevel) {
-							PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
+							if (expect_funcptr)
+								PUT(PARSER_DEF, T->token, T->lineno, T->sp);
+							else
+								PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 						} else {
 							/* put latest token if any */
 							if (savetok[0]) {
@@ -493,9 +501,11 @@ C_family(const struct parser_param *param, int type)
 							PUT(PARSER_DEF, savetok, T->lineno, T->sp);
 							savetok[0] = 0;
 						}
-					}
+					} else if (c == '*')
+						expect_funcptr = 1; /* expect function pointer typedef */
+
 					if (local->level == typedef_savelevel && c == ';')
-						break;
+						break;  /* go out of typedef block parsing */
 				}
 				if (param->flags & PARSER_WARNING) {
 					if (c == EOF)
@@ -557,10 +567,10 @@ static int
 function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 {
 	int c;
-	int brace_level, isdefine;
+	int brace_level, isdefine, symbols;
 	int accept_arg1 = 0;
 
-	brace_level = isdefine = 0;
+	brace_level = isdefine = symbols = 0;
 	while ((c = T->op->nexttoken("()", c_reserved_word)) != EOF) {
 		switch (c) {
 		case SHARP_IFDEF:
@@ -615,9 +625,15 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 			brace_level++;
 		else if (c == /* ( */')' || c == ']')
 			brace_level--;
-		else if (brace_level == 0
-		    && ((c == SYMBOL && strcmp(T->token, "__THROW")) || IS_RESERVED_WORD(c)))
-			isdefine = 1;
+		else if (brace_level == 0 && c != C___THROW)
+			if (IS_RESERVED_WORD(c))
+				isdefine = 1;
+			else if (c == SYMBOL) {
+				if (symbols > 1)
+					isdefine = 1;
+				else
+					symbols ++;
+			}
 		else if (c == ';' || c == ',') {
 			if (!isdefine)
 				break;

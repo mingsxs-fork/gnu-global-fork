@@ -59,35 +59,36 @@
 #define C__NORETURN	2017
 #define C__STATIC_ASSERT	2018
 #define C__THREAD_LOCAL	2019
-#define C_AUTO	2020
-#define C_BREAK	2021
-#define C_CASE	2022
-#define C_CHAR	2023
-#define C_CONTINUE	2024
-#define C_DEFAULT	2025
-#define C_DO	2026
-#define C_DOUBLE	2027
-#define C_ELSE	2028
-#define C_ENUM	2029
-#define C_EXTERN	2030
-#define C_FLOAT	2031
-#define C_FOR	2032
-#define C_GOTO	2033
-#define C_IF	2034
-#define C_INT	2035
-#define C_LONG	2036
-#define C_REGISTER	2037
-#define C_RETURN	2038
-#define C_SHORT	2039
-#define C_SIZEOF	2040
-#define C_STATIC	2041
-#define C_STRUCT	2042
-#define C_SWITCH	2043
-#define C_TYPEDEF	2044
-#define C_UNION	2045
-#define C_UNSIGNED	2046
-#define C_VOID	2047
-#define C_WHILE	2048
+#define C___THROW	2020
+#define C_AUTO	2021
+#define C_BREAK	2022
+#define C_CASE	2023
+#define C_CHAR	2024
+#define C_CONTINUE	2025
+#define C_DEFAULT	2026
+#define C_DO	2027
+#define C_DOUBLE	2028
+#define C_ELSE	2029
+#define C_ENUM	2030
+#define C_EXTERN	2031
+#define C_FLOAT	2032
+#define C_FOR	2033
+#define C_GOTO	2034
+#define C_IF	2035
+#define C_INT	2036
+#define C_LONG	2037
+#define C_REGISTER	2038
+#define C_RETURN	2039
+#define C_SHORT	2040
+#define C_SIZEOF	2041
+#define C_STATIC	2042
+#define C_STRUCT	2043
+#define C_SWITCH	2044
+#define C_TYPEDEF	2045
+#define C_UNION	2046
+#define C_UNSIGNED	2047
+#define C_VOID	2048
+#define C_WHILE	2049
 #define SHARP_SHARP	3001
 #define SHARP_ASSERT	3002
 #define SHARP_DEFINE	3003
@@ -150,7 +151,7 @@
 #define YACC_END	4040
 struct keyword { char *name; int token; };
 
-#define TOTAL_KEYWORDS 142
+#define TOTAL_KEYWORDS 143
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 24
 #define MIN_HASH_VALUE 3
@@ -176,8 +177,8 @@ c_hash (register const char *str, register size_t len)
       353, 353, 353, 353, 353,  10,  55, 353, 353, 353,
       353, 353, 353, 353, 353, 353, 353, 353, 353, 353,
       353, 353, 353, 353, 353,  15,   5,   0, 353, 353,
-      353,  20, 353,   0, 353, 353, 353, 353,   5, 353,
-      353, 353, 353,   5,   0, 353, 353, 353, 353, 353,
+      353,  20,   0,   0, 353, 353, 353, 353,   5,   0,
+      353, 353, 353,   5,   0, 353, 353,   0, 353, 353,
       353, 353, 353, 353, 353,   0,  30,   0, 105,  30,
        10,   0,   5,  25,  50,   5, 353,   5, 105, 115,
         0,  30,  75,   0,  50,  30,   5,  25,   0,  10,
@@ -243,7 +244,8 @@ c_lookup (register const char *str, register size_t len)
     {
       {""}, {""}, {""},
       {"__P", C___P},
-      {""}, {""}, {""}, {""},
+      {""}, {""}, {""},
+      {"__THROW", C___THROW},
       {"int", C_INT},
       {""}, {""}, {""},
       {"if", C_IF},
