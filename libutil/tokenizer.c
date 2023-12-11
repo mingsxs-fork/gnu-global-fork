@@ -51,6 +51,7 @@
 
 static VSTACK *tokenizer_stack = NULL;  /* tokenizer stack */
 TOKENIZER *CURRENT;  /* current tokenizer */
+STATIC_STRBUF(ib); /* input buffer */
 
 /* when we call those default tokenizer ops functions,
  * it means the tokenizer object has already been created,
@@ -87,10 +88,7 @@ int opened_tokenizers (void)
 TOKENIZER *
 tokenizer_open (const struct gtags_path *gpath, struct tokenizer_ops *ops, void *lang_data)
 {
-	static STRBUF *sb = NULL;
 	TOKENIZER *t;
-	if (unlikely(!sb))
-		sb = static_strbuf_open(MAXBUFLEN);
 	if (!tokenizer_stack)
 		tokenizer_stack = vstack_open(sizeof(struct tokenizer), STACK_EXPAND);
 	t = vstack_push(tokenizer_stack); /* allocate new tokenizer on stack */
@@ -103,7 +101,8 @@ tokenizer_open (const struct gtags_path *gpath, struct tokenizer_ops *ops, void 
 	t->lang_priv = lang_data; /* lang private data */
 	if ((t->ip = fopen(t->gpath->path, "rb")) == NULL)
 		goto failed;
-	t->ib = sb;
+	__strbuf_init(ib, MAXBUFLEN);
+	t->ib = ib;
 	CURRENT = t; /* update CURRENT */
 	return t;
 
@@ -120,9 +119,11 @@ tokenizer_close (TOKENIZER *t)
 	/* only close tokenizer if it's current tokenizer to avoid multiple close */
 	if (t && t == CURRENT) {
 		t = vstack_pop(tokenizer_stack);
+#if 0
 		if (t->ib) {
 			strbuf_reset(t->ib);
 		}
+#endif
 		if (t->ip) {
 			fclose(t->ip);
 		}

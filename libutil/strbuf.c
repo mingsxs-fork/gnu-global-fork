@@ -46,7 +46,6 @@
 #define first_zero_bit(x)	(int)(__builtin_ffs(~(unsigned int)x) - 1)
 
 static STRBUF_POOL *sb_pool = NULL;
-static VARRAY *static_sb = NULL;
 
 /*
 
@@ -708,33 +707,4 @@ strbuf_pool_release (STRBUF *sb)
 		}
 	}
 	isave = (i == sb_pool->vb->length ? 0 : i); /* update isave */
-}
-
-STRBUF *
-static_strbuf_open(int initsize)
-{
-	STRBUF *sb;
-	if (!static_sb)
-		static_sb = varray_open(sizeof(STRBUF), 64);
-	sb = varray_append(static_sb);
-	sb->sbufsize = 0;
-	__strbuf_init(sb, initsize);
-	return sb;
-}
-
-void
-static_strbuf_free(void)
-{
-	STRBUF *sb;
-	int i;
-	if (!static_sb)
-		return ;
-	for (i = 0; i < static_sb->length; i++) {
-		sb = varray_assign(static_sb, i, 0);
-		if (sb->name)
-			(void)free(sb->name);
-		if (sb->sbuf)
-			(void)free(sb->sbuf);
-	}
-	varray_close(static_sb);
 }

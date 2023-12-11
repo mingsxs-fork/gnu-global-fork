@@ -219,7 +219,6 @@ main(int argc, char **argv)
 	 * Show URL's page.
 	 */
 	show_page_by_url(browser, strbuf_value(URL));
-	static_strbuf_free();
 	exit(0);
 }
 

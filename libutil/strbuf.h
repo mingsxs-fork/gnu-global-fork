@@ -180,8 +180,4 @@ void strbuf_pool_close(void);
 STRBUF *strbuf_pool_assign(int);
 void strbuf_pool_release(STRBUF *);
 
-/* static strbuf */
-STRBUF *static_strbuf_open(int);
-void static_strbuf_free(void);
-
 #endif /* ! _STRBUF_H */

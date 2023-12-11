@@ -44,7 +44,7 @@ static void trim_suffix_list(STRBUF *, STRHASH *);
 static int match_suffix_list(const char *, const char *, const char *);
 
 STATIC_STRBUF(lastmatch);
-static STRBUF *active_map;
+STATIC_STRBUF(active_map);
 static int wflag;
 
 /**
@@ -71,7 +71,7 @@ setup_langmap(const char *map)
 	char *p;
 	int onsuffix = 0;		/* not on suffix string */
 
-	active_map = strbuf_open(0);
+	strbuf_clear(active_map);
 	strbuf_puts(active_map, map);
 	for (p = strbuf_value(active_map); *p; p++) {
 		/*

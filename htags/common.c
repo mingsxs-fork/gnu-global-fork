@@ -539,27 +539,25 @@ gen_list_begin(void)
 {
 	STATIC_STRBUF(sb);
 
-	if (strbuf_empty(sb)) {
-		strbuf_clear(sb);
-		if (table_list) {
-			if (enable_xhtml) {
-				strbuf_sprintf(sb, "%s\n%s%s%s%s",
-					table_begin, 
-					"<tr><th class='tag'>tag</th>",
-					"<th class='line'>line</th>",
-					"<th class='file'>file</th>",
-					"<th class='code'>source code</th></tr>");
-			} else {
-				strbuf_sprintf(sb, "%s\n%s%s%s%s",
-					table_begin, 
-					"<tr><th nowrap='nowrap' align='left'>tag</th>",
-					"<th nowrap='nowrap' align='right'>line</th>",
-					"<th nowrap='nowrap' align='center'>file</th>",
-					"<th nowrap='nowrap' align='left'>source code</th></tr>");
-			}
+	strbuf_clear(sb);
+	if (table_list) {
+		if (enable_xhtml) {
+			strbuf_sprintf(sb, "%s\n%s%s%s%s",
+				table_begin, 
+				"<tr><th class='tag'>tag</th>",
+				"<th class='line'>line</th>",
+				"<th class='file'>file</th>",
+				"<th class='code'>source code</th></tr>");
 		} else {
-			strbuf_puts(sb, verbatim_begin);
+			strbuf_sprintf(sb, "%s\n%s%s%s%s",
+				table_begin, 
+				"<tr><th nowrap='nowrap' align='left'>tag</th>",
+				"<th nowrap='nowrap' align='right'>line</th>",
+				"<th nowrap='nowrap' align='center'>file</th>",
+				"<th nowrap='nowrap' align='left'>source code</th></tr>");
 		}
+	} else {
+		strbuf_puts(sb, verbatim_begin);
 	}
 	return strbuf_value(sb);
 }

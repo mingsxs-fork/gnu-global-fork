@@ -1684,6 +1684,5 @@ main(int argc, char **argv)
 	 */
 	print_statistics(statistics);
 	clean();
-	static_strbuf_free();
 	return 0;
 }

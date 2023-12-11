@@ -1005,7 +1005,6 @@ main(int argc, char **argv)
 	else {
 		tagsearch(av, cwd, root, dbpath, db);
 	}
-	static_strbuf_free();
 	return 0;
 }
 /**

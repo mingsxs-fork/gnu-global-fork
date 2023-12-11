@@ -37,7 +37,6 @@
 
 /* File buffer */
 #define EXPAND 1024
-static STRBUF *ib = NULL;
 static char *filebuf;
 static int filesize;
 
@@ -59,21 +58,19 @@ static void linetable_put(int, int);
 int
 linetable_open(const char *path)
 {
+	STATIC_STRBUF(ib);
 	FILE *ip;
 	struct stat sb;
 	int lineno, offset;
 
 	if (stat(path, &sb) < 0)
 		return -1;
-	if (ib)
-		strbuf_reset(ib);
-	else
-		ib = static_strbuf_open(sb.st_size);
 	vb = varray_open(sizeof(int), EXPAND);
 	if ((ip = fopen(path, "r")) == NULL)
 		return -1;
 	lineno = 1;
 	offset = 0;
+	__strbuf_init(ib, sb.st_size);
 	for (offset = 0;
 		(strbuf_fgets(ib, ip, STRBUF_APPEND), offset != strbuf_getlen(ib));
 		offset = strbuf_getlen(ib))

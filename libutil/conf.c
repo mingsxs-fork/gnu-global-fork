@@ -182,7 +182,7 @@ readrecord(FILE *fp, const char *label)
 static void
 includelabel(FILE *fp, STRBUF *sb, const char *label, int level)
 {
-	static STRBUF *inc = NULL;
+	STATIC_STRBUF(inc);
 	const char *savep, *p, *q;
 	char *file;
 
@@ -203,11 +203,7 @@ includelabel(FILE *fp, STRBUF *sb, const char *label, int level)
 	if (!(savep = p = readrecord(fp, label)))
 		die("label '%s' not found in '%s'.", label, config_path);
 	while ((q = locatestring(p, ":include=", MATCH_FIRST)) || (q = locatestring(p, ":tc=", MATCH_FIRST))) {
-		if (inc)
-			strbuf_reset(inc);
-		else
-			inc = static_strbuf_open(0);
-
+		strbuf_reset(inc);
 		strbuf_nputs(sb, p, q - p);
 		q = locatestring(q, "=", MATCH_FIRST) + 1;
 		for (; *q && *q != ':'; q++)
@@ -289,7 +285,7 @@ configpath(const char *rootdir)
 void
 openconf(const char *rootdir)
 {
-	STRBUF *sb;
+	STRBUF *sb = strbuf_open(0);
 
 	if (opened)
 		return;
@@ -323,19 +319,18 @@ openconf(const char *rootdir)
 		if (!(fp = fopen(config_path, "r")))
 			die("cannot open '%s'.", config_path);
 		ib = strbuf_open(MAXBUFLEN);
-		sb = strbuf_open(0);
 		includelabel(fp, sb, config_label, 0);
 		confline = check_strdup(strbuf_value(sb));
 		strbuf_close(ib);
-		strbuf_close(sb);
+		strbuf_reset(sb);
 		fclose(fp);
 	}
 	/*
 	 * make up required variables.
 	 */
-	sb = strbuf_open(0);
 	strbuf_puts(sb, confline);
 	strbuf_unputc(sb, ':');
+	free(confline);
 
 	if (!getconfs("langmap", NULL)) {
 		strbuf_puts(sb, ":langmap=");
@@ -385,17 +380,9 @@ int recursive_call = 0;
 static void
 replace_variables(STRBUF *sb)
 {
-	static STRBUF *result = NULL;
-	static STRBUF *word = NULL;
+	STRBUF *result = strbuf_open(0);
+	STRBUF *word = strbuf_open(0);
 	const char *p = strbuf_value(sb);
-	if (result)
-		strbuf_reset(result);
-	else
-		result = static_strbuf_open(0);
-	if (word)
-		strbuf_reset(word);
-	else
-		word = static_strbuf_open(0);
 
 	/*
 	 * Simple of detecting infinite loop.
@@ -431,6 +418,8 @@ replace_variables(STRBUF *sb)
 	}
 	strbuf_reset(sb);
 	strbuf_puts(sb, strbuf_value(result));
+	strbuf_close(result);
+	strbuf_close(word);
 	recursive_call--;
 }
 /**
@@ -443,7 +432,7 @@ replace_variables(STRBUF *sb)
 int
 getconfs(const char *name, STRBUF *result)
 {
-	static STRBUF *sb = NULL;
+	STRBUF *sb;
 	const char *p;
 	char buf[MAXPROPLEN];
 	int all = 0;
@@ -458,10 +447,7 @@ getconfs(const char *name, STRBUF *result)
 			strbuf_puts(result, config_path);
 		return 1;
 	}
-	if (sb)
-		strbuf_reset(sb);
-	else
-		sb = static_strbuf_open(0);
+	sb = strbuf_open(0);
 	if (!strcmp(name, "skip") || !strcmp(name, "gtags_parser") || !strcmp(name, "langmap"))
 		all = 1;
 	snprintf(buf, sizeof(buf), ":%s=", name);
@@ -537,6 +523,7 @@ getconfs(const char *name, STRBUF *result)
 		strbuf_puts(result, !strcmp(name, "langmap") ? 
 			trim_langmap(strbuf_value(sb)) :
 			strbuf_value(sb));
+	strbuf_close(sb);
 	return exist;
 }
 /**

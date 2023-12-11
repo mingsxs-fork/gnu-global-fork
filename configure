@@ -3568,7 +3568,7 @@ fi
 
 # Define the identity of the package.
  PACKAGE='global'
- VERSION='6.6.10'
+ VERSION='6.6.10-ming'
 
 
 printf "%s\n" "#define PACKAGE \"$PACKAGE\"" >>confdefs.h

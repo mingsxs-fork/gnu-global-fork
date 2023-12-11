@@ -73,7 +73,7 @@ static TOKENIZER *T = NULL; /* current tokenizer */
 void
 Cpp(const struct parser_param *param)
 {
-	static STRBUF *sb = NULL;
+	STATIC_STRBUF(sb);
 	int c, cc;
 	int savelevel;
 	int startclass, startthrow, startmacro, startsharp, startequal;
@@ -89,8 +89,6 @@ Cpp(const struct parser_param *param)
 	const char *interested = "{}=;~";
 	struct _lang_local _local = {0};
 	struct _lang_local *local = &_local;
-	if (!sb)
-		sb = static_strbuf_open(0);
 
 	*classname = *completename = 0;
 	stack[0].classname = completename;

@@ -110,8 +110,8 @@ C_family(const struct parser_param *param, int type)
 	savelevel = -1;
 	startmacro = startsharp = 0;
 
-	if (!opentoken(param->file))
-		die("'%s' cannot open.", param->file);
+	if (!opentoken(param->gpath->path))
+		die("'%s' cannot open.", param->gpath->path);
 	cmode = 1;			/* allow token like '#xxx' */
 	crflag = 1;			/* require '\n' as a token */
 	if (type == TYPE_YACC)

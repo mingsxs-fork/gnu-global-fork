@@ -51,7 +51,7 @@
 #define GET_SYM(offset) (assert((offset) < strbuf_getlen(asm_symtable)),\
 			 &strbuf_value(asm_symtable)[offset])
 
-STRBUF *asm_symtable = NULL;
+STRBUF *asm_symtable;
 
 static void yyerror(const struct parser_param *, const char *);
 
@@ -153,14 +153,12 @@ assembly(const struct parser_param *param)
 	if (linetable_open(param->gpath->path) == -1)
 		die("'%s' cannot open.", param->gpath->path);
 
-	if (asm_symtable)
-		strbuf_reset(asm_symtable);
-	else
-		asm_symtable = static_strbuf_open(0);
+	asm_symtable = strbuf_open(0);
 	asm_initscan();
 
 	asm_parse(param);
 
+	strbuf_close(asm_symtable);
 	linetable_close();
 }
 

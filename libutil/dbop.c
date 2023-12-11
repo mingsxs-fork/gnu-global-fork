@@ -807,17 +807,13 @@ dbop_putversion(DBOP *dbop, int version)
 void
 dbop_close(DBOP *dbop)
 {
-	static STRBUF *sb = NULL;
 	DB *db = dbop->db;
+	STATIC_STRBUF(sb);
 
 	/*
 	 * Load sorted tag records and write them to the tag file.
 	 */
 	if (dbop->sortout != NULL) {
-		if (sb)
-			strbuf_reset(sb);
-		else
-			sb = static_strbuf_open(256);
 		char *p;
 
 		/*
@@ -829,6 +825,7 @@ dbop_close(DBOP *dbop)
 		 */
 		fclose(dbop->sortout);
 		dbop->sortout = NULL;
+		strbuf_clear(sb);
 		/*
 		 * The last stage of sorted writing.
 		 */

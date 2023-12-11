@@ -643,7 +643,6 @@ main(int argc, char **argv)
 	closeconf();
 	strbuf_close(sb);
 	print_statistics(statistics);
-	static_strbuf_free();
 	return 0;
 }
 /**

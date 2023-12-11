@@ -540,7 +540,6 @@ cscope: Could not create private temp dir %s\n",
     }
     /* cleanup and exit */
     myexit(0);
-	static_strbuf_free();
     /* NOTREACHED */
     return 0;		/* avoid warning... */
 }

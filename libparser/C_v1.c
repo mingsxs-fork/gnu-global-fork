@@ -124,15 +124,13 @@ C(const struct parser_param *param)
 static void
 C_family(const struct parser_param *param, int type)
 {
-	static STRBUF *sb = NULL;
+	STATIC_STRBUF(sb);
 	int c, cc;
 	int savelevel;
 	int startmacro, startsharp;
 	const char *interested = "{}=;";
 	struct _lang_local _local = {0};
 	struct _lang_local *local = &_local;
-	if(!sb)
-		sb = static_strbuf_open(0);
 	/*
 	 * yacc file format is like the following.
 	 *

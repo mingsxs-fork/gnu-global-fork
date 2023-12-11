@@ -57,7 +57,7 @@ static void put_standard_format(CONVERT *, GTP *, int);
 static int nosource;
 static int format;
 
-static STRBUF *sb_uncompress;
+STATIC_STRBUF(sb_uncompress);
 
 /** get next number and seek to the next character */
 #define GET_NEXT_NUMBER(p) do {                                                \
@@ -76,13 +76,11 @@ start_output(int a_format, int a_nosource)
 	cur_lineno = last_lineno = 0;
 	fp = NULL;
 	src = "";
-	sb_uncompress = strbuf_open(0);
+	strbuf_clear(sb_uncompress);
 }
 void
 end_output(void)
 {
-	if (sb_uncompress)
-		strbuf_close(sb_uncompress);
 	if (fp)
 		fclose(fp);
 }
