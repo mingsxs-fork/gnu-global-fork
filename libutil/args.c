@@ -298,7 +298,7 @@ prepend_options(int *argc, char *const *argv, const char *options)
 	*argc = i;
 #ifdef DEBUG
 	for (i = 0; i < *argc; i++)
-		fprintf(stderr, "newargv[%d] = '%s'\n", i, newargv[i]);
+		message("newargv[%d] = '%s'\n", i, newargv[i]);
 #endif
 	/* doesn't close string buffer. */
 

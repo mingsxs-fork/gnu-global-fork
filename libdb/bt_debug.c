@@ -65,14 +65,14 @@ __bt_dump(dbp)
 	char *sep;
 
 	t = dbp->internal;
-	(void)fprintf(stderr, "%s: pgsz %d",
+	(void)message("%s: pgsz %d",
 	    F_ISSET(t, B_INMEM) ? "memory" : "disk", t->bt_psize);
 	if (F_ISSET(t, R_RECNO))
-		(void)fprintf(stderr, " keys %lu", (long unsigned int)t->bt_nrecs);
+		(void)message(" keys %lu", (long unsigned int)t->bt_nrecs);
 #undef X
 #define	X(flag, name) \
 	if (F_ISSET(t, flag)) { \
-		(void)fprintf(stderr, "%s%s", sep, name); \
+		(void)message("%s%s", sep, name); \
 		sep = ", "; \
 	}
 	if (t->flags != 0) {
@@ -83,7 +83,7 @@ __bt_dump(dbp)
 		X(B_RDONLY,	"RDONLY");
 		X(R_RECNO,	"RECNO");
 		X(B_METADIRTY,"METADIRTY");
-		(void)fprintf(stderr, ")\n");
+		(void)message(")\n");
 	}
 #undef X
 
@@ -106,23 +106,23 @@ __bt_dmpage(h)
 	char *sep;
 
 	m = (BTMETA *)h;
-	(void)fprintf(stderr, "magic %lx\n", (long unsigned int)m->magic);
-	(void)fprintf(stderr, "version %lu\n", (long unsigned int)m->version);
-	(void)fprintf(stderr, "psize %lu\n", (long unsigned int)m->psize);
-	(void)fprintf(stderr, "free %lu\n", (long unsigned int)m->free);
-	(void)fprintf(stderr, "nrecs %lu\n", (long unsigned int)m->nrecs);
-	(void)fprintf(stderr, "flags %lu", (long unsigned int)m->flags);
+	(void)message("magic %lx\n", (long unsigned int)m->magic);
+	(void)message("version %lu\n", (long unsigned int)m->version);
+	(void)message("psize %lu\n", (long unsigned int)m->psize);
+	(void)message("free %lu\n", (long unsigned int)m->free);
+	(void)message("nrecs %lu\n", (long unsigned int)m->nrecs);
+	(void)message("flags %lu", (long unsigned int)m->flags);
 #undef X
 #define	X(flag, name) \
 	if (m->flags & flag) { \
-		(void)fprintf(stderr, "%s%s", sep, name); \
+		(void)message("%s%s", sep, name); \
 		sep = ", "; \
 	}
 	if (m->flags) {
 		sep = " (";
 		X(B_NODUPS,	"NODUPS");
 		X(R_RECNO,	"RECNO");
-		(void)fprintf(stderr, ")");
+		(void)message(")");
 	}
 }
 
@@ -163,11 +163,11 @@ __bt_dpage(h)
 	indx_t cur, top;
 	char *sep;
 
-	(void)fprintf(stderr, "    page %d: (", h->pgno);
+	(void)message("    page %d: (", h->pgno);
 #undef X
 #define	X(flag, name) \
 	if (h->flags & flag) { \
-		(void)fprintf(stderr, "%s%s", sep, name); \
+		(void)message("%s%s", sep, name); \
 		sep = ", "; \
 	}
 	sep = "";
@@ -177,66 +177,60 @@ __bt_dpage(h)
 	X(P_RLEAF,	"RLEAF")
 	X(P_OVERFLOW,	"OVERFLOW")
 	X(P_PRESERVE,	"PRESERVE");
-	(void)fprintf(stderr, ")\n");
+	(void)message(")\n");
 #undef X
 
-	(void)fprintf(stderr, "\tprev %2d next %2d", h->prevpg, h->nextpg);
+	(void)message("\tprev %2d next %2d", h->prevpg, h->nextpg);
 	if (h->flags & P_OVERFLOW)
 		return;
 
 	top = NEXTINDEX(h);
-	(void)fprintf(stderr, " lower %3d upper %3d nextind %d\n",
+	(void)message(" lower %3d upper %3d nextind %d\n",
 	    h->lower, h->upper, top);
 	for (cur = 0; cur < top; cur++) {
-		(void)fprintf(stderr, "\t[%03d] %4d ", cur, h->linp[cur]);
+		(void)message("\t[%03d] %4d ", cur, h->linp[cur]);
 		switch (h->flags & P_TYPE) {
 		case P_BINTERNAL:
 			bi = GETBINTERNAL(h, cur);
-			(void)fprintf(stderr,
-			    "size %03d pgno %03d", bi->ksize, bi->pgno);
+			(void)message("size %03d pgno %03d", bi->ksize, bi->pgno);
 			if (bi->flags & P_BIGKEY)
-				(void)fprintf(stderr, " (indirect)");
+				(void)message(" (indirect)");
 			else if (bi->ksize)
-				(void)fprintf(stderr,
-				    " {%.*s}", (int)bi->ksize, bi->bytes);
+				(void)message(" {%.*s}", (int)bi->ksize, bi->bytes);
 			break;
 		case P_RINTERNAL:
 			ri = GETRINTERNAL(h, cur);
-			(void)fprintf(stderr, "entries %03d pgno %03d",
+			(void)message("entries %03d pgno %03d",
 				ri->nrecs, ri->pgno);
 			break;
 		case P_BLEAF:
 			bl = GETBLEAF(h, cur);
 			if (bl->flags & P_BIGKEY)
-				(void)fprintf(stderr,
-				    "big key page %lu size %u/",
+				(void)message("big key page %lu size %u/",
 				    (long unsigned int)*(pgno_t *)bl->bytes,
 				    (unsigned int)*(u_int32_t *)(bl->bytes + sizeof(pgno_t)));
 			else if (bl->ksize)
-				(void)fprintf(stderr, "%s/", bl->bytes);
+				(void)message("%s/", bl->bytes);
 			if (bl->flags & P_BIGDATA)
-				(void)fprintf(stderr,
-				    "big data page %lu size %u",
+				(void)message("big data page %lu size %u",
 				    (long unsigned int)*(pgno_t *)(bl->bytes + bl->ksize),
 				    (unsigned int)*(u_int32_t *)(bl->bytes + bl->ksize +
 				    sizeof(pgno_t)));
 			else if (bl->dsize)
-				(void)fprintf(stderr, "%.*s",
+				(void)message("%.*s",
 				    (int)bl->dsize, bl->bytes + bl->ksize);
 			break;
 		case P_RLEAF:
 			rl = GETRLEAF(h, cur);
 			if (rl->flags & P_BIGDATA)
-				(void)fprintf(stderr,
-				    "big data page %lu size %u",
+				(void)message("big data page %lu size %u",
 				    (long unsigned int)*(pgno_t *)rl->bytes,
 				    (unsigned int)*(u_int32_t *)(rl->bytes + sizeof(pgno_t)));
 			else if (rl->dsize)
-				(void)fprintf(stderr,
-				    "%.*s", (int)rl->dsize, rl->bytes);
+				(void)message("%.*s", (int)rl->dsize, rl->bytes);
 			break;
 		}
-		(void)fprintf(stderr, "\n");
+		(void)message("\n");
 	}
 }
 
@@ -295,30 +289,27 @@ __bt_stat(dbp)
 		(void)mpool_put(t->bt_mp, h, 0);
 	}
 
-	(void)fprintf(stderr, "%d level%s with %ld keys",
+	(void)message("%d level%s with %ld keys",
 	    levels, levels == 1 ? "" : "s", nkeys);
 	if (F_ISSET(t, R_RECNO))
-		(void)fprintf(stderr, " (%ld header count)", (long int)t->bt_nrecs);
-	(void)fprintf(stderr,
-	    "\n%lu pages (leaf %ld, internal %ld, overflow %ld)\n",
+		(void)message(" (%ld header count)", (long int)t->bt_nrecs);
+	(void)message("\n%lu pages (leaf %ld, internal %ld, overflow %ld)\n",
 	    (long unsigned int)(pinternal + pleaf + pcont), (long unsigned int)pleaf, (long unsigned int)pinternal, (long unsigned int)pcont);
-	(void)fprintf(stderr, "%ld cache hits, %ld cache misses\n",
+	(void)message("%ld cache hits, %ld cache misses\n",
 	    bt_cache_hit, bt_cache_miss);
-	(void)fprintf(stderr, "%ld splits (%ld root splits, %ld sort splits)\n",
+	(void)message("%ld splits (%ld root splits, %ld sort splits)\n",
 	    bt_split, bt_rootsplit, bt_sortsplit);
 	pleaf *= t->bt_psize - BTDATAOFF;
 	if (pleaf)
-		(void)fprintf(stderr,
-		    "%.0f%% leaf fill (%ld bytes used, %ld bytes free)\n",
+		(void)message("%.0f%% leaf fill (%ld bytes used, %ld bytes free)\n",
 		    ((double)(pleaf - lfree) / pleaf) * 100,
 		    pleaf - lfree, lfree);
 	pinternal *= t->bt_psize - BTDATAOFF;
 	if (pinternal)
-		(void)fprintf(stderr,
-		    "%.0f%% internal fill (%ld bytes used, %ld bytes free\n",
+		(void)message("%.0f%% internal fill (%ld bytes used, %ld bytes free\n",
 		    ((double)(pinternal - ifree) / pinternal) * 100,
 		    pinternal - ifree, ifree);
 	if (bt_pfxsaved)
-		(void)fprintf(stderr, "prefix checking removed %lu bytes.\n",
+		(void)message("prefix checking removed %lu bytes.\n",
 		    bt_pfxsaved);
 }

@@ -75,7 +75,7 @@ debug_print(const char *s, ...)
 	va_list ap;
 
 	va_start(ap, s);
-	(void)vfprintf(stderr, s, ap);
+	(void)message(s, ap);
 	va_end(ap);
 }
 

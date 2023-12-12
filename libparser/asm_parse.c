@@ -760,7 +760,7 @@ enum { YYENOMEM = -2 };
 
 # ifndef YYFPRINTF
 #  include <stdio.h> /* INFRINGES ON USER NAME SPACE */
-#  define YYFPRINTF fprintf
+#  define YYFPRINTF(unused, ...) message(__VA_ARGS__)
 # endif
 
 # define YYDPRINTF(Args)                        \

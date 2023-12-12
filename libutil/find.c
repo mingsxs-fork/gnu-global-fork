@@ -182,7 +182,7 @@ prepare_source(void)
 	p = langmap;
 	strbuf_puts(sb, "/(");
 	if (debug)
-		fprintf(stderr, "langmap = %s\n", langmap);
+		message("langmap = %s\n", langmap);
 	while (*p) {
 		/* skip language name */
 		for (; *p && *p != ':'; p++)
@@ -233,7 +233,7 @@ prepare_source(void)
 	strbuf_unputc(sb, '|');
 	strbuf_puts(sb, ")$");
 	if (debug)
-		fprintf(stderr, "prepare_source: %s\n", strbuf_value(sb));
+		message("prepare_source: %s\n", strbuf_value(sb));
 	if (regcomp(&suff_area, strbuf_value(sb), flags) != 0)
 		die("cannot compile regular expression.");
 	strbuf_close(sb);
@@ -276,7 +276,7 @@ prepare_skip(void)
 	}
 	skiplist = check_strdup(strbuf_value(reg));
 	if (debug)
-		fprintf(stderr, "DBG: Original skip list:\n%s\n", skiplist);
+		message("DBG: Original skip list:\n%s\n", skiplist);
 	strbuf_reset(reg);
 	/*
 	 * construct regular expression.
@@ -390,7 +390,7 @@ prepare_skip(void)
 	 * compile regular expression.
 	 */
 	if (debug)
-		fprintf(stderr, "DBG: Regular expression of the skip list:\n%s\n", strbuf_value(reg));
+		message("DBG: Regular expression of the skip list:\n%s\n", strbuf_value(reg));
 	if (regcomp(&skip_area, strbuf_value(reg), flags) != 0)
 		die("cannot compile regular expression.");
 	strbuf_close(reg);
@@ -444,39 +444,39 @@ skipthisfile(const char *path)
 	if (regexec(skip, path, 1, &m, 0) == 0) {
 		if (debug) {
 			int len = strlen(path);
-			fprintf(stderr, "DBG: ");
+			message("DBG: ");
 			for (i = 0; i < len; i++) {
 				if (m.rm_so == i)
-					fputc('[', stderr);
+					messagec('[');
 				if (m.rm_eo == i)
-					fputc(']', stderr);
-				fputc(path[i], stderr);
+					messagec(']');
+				messagec(path[i]);
 			}
 			if (m.rm_eo == len)
-				fputc(']', stderr);
-			fprintf(stderr, " => SKIPPED\n");
+				messagec(']');
+			message(" => SKIPPED\n");
 		}
 		if (find_explain) {
 			int type = getreason(path);
 			const char *kind = (type >> 8) ? "Directory" : "File";
 
-			fprintf(stderr, " - %s '%s' is skipped", kind, trimpath(path));
+			message(" - %s '%s' is skipped", kind, trimpath(path));
 			switch (type & 0xff) {
 			case 1:
-				fprintf(stderr, " because the name begins with a dot.\n");
+				message(" because the name begins with a dot.\n");
 				break;
 			case 2:
-				fprintf(stderr, " because it is a tag file.\n");
+				message(" because it is a tag file.\n");
 				break;
 			case 0:		
-				fprintf(stderr, " by the skip list.\n");
+				message(" by the skip list.\n");
 				break;
 			}
 		}
 		return 1;
 	} else {
 		if (debug)
-			fprintf(stderr, "%s\n", path);
+			message("%s\n", path);
 	}
 	return 0;
 }
@@ -522,10 +522,10 @@ has_symlinkloop(const char *dir)
 	if ((real = realpath(dir, NULL)) == NULL)
 		die("cannot get real path of '%s'.", trimpath(dir));
 #ifdef SLOOPDEBUG
-	fprintf(stderr, "======== has_symlinkloop ======\n");
-	fprintf(stderr, "dir = '%s', real path = '%s'\n", dir, real);
-	fprintf(stderr, "TEST-1\n");
-	fprintf(stderr, "\tcheck '%s' < '%s'\n", real, rootdir);
+	message("======== has_symlinkloop ======\n");
+	message("dir = '%s', real path = '%s'\n", dir, real);
+	message("TEST-1\n");
+	message("\tcheck '%s' < '%s'\n", real, rootdir);
 #endif
 	p = locatestring(rootdir, real, MATCH_AT_FIRST);
 	if (p && (*p == '/' || *p == '\0' || !strcmp(real, "/"))) {
@@ -534,11 +534,11 @@ has_symlinkloop(const char *dir)
 	}
 	sp = varray_assign(vstack->varray, 0, 0);
 #ifdef SLOOPDEBUG
-	fprintf(stderr, "TEST-2\n");
+	message("TEST-2\n");
 #endif
 	for (i = vstack->stack_top; i >= 0; i--) {
 #ifdef SLOOPDEBUG
-		fprintf(stderr, "%d:\tcheck '%s' == '%s'\n", i, real, sp[i].real);
+		message("%d:\tcheck '%s' == '%s'\n", i, real, sp[i].real);
 #endif
 		if (!strcmp(sp[i].real, real)) {
 			ret = 1;
@@ -546,7 +546,7 @@ has_symlinkloop(const char *dir)
 		}
 	}
 #ifdef SLOOPDEBUG
-	fprintf(stderr, "===============================\n");
+	message("===============================\n");
 #endif
 out:
 	free(real);
@@ -638,7 +638,7 @@ getdirs(const char *dir, STRBUF *sb)
 				    ((skip_symlink & SKIP_SYMLINK_FOR_FILE) && S_ISREG(st.st_mode)))
 				{
 					if (find_explain)
-						fprintf(stderr, " - Symbolic link '%s' is skipped.\n",
+						message(" - Symbolic link '%s' is skipped.\n",
 							trimpath(makepath(dir, dp->d_name, NULL)));
 					continue;
 				}

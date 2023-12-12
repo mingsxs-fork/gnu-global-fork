@@ -141,23 +141,23 @@ abbrev_dump(void)
 	int i, limit = sizeof(ab2name) / sizeof(struct abbrmap);
 
 	if (!name2ab) {
-		fprintf(stderr, "name2ab is NULL.\n");
+		message("name2ab is NULL.\n");
 		return;
 	}
-	fprintf(stderr, "ab2name: %d entries\n", limit);
+	message("ab2name: %d entries\n", limit);
 	for (i = 0; i < limit; i++) {
 		if (ab2name[i].c != 0) {
-			fprintf(stderr, "ab2name[%d].c    = %c\n", i, ab2name[i].c);
-			fprintf(stderr, "ab2name[%d].name = %s\n", i, ab2name[i].name);
+			message("ab2name[%d].c    = %c\n", i, ab2name[i].c);
+			message("ab2name[%d].name = %s\n", i, ab2name[i].name);
 		}
 	}
 	ab = (struct abbrmap *)varray_assign(name2ab, 0, 0);
 	limit = name2ab->length;
-	fprintf(stderr, "name2ab: %d entries\n", limit);
+	message("name2ab: %d entries\n", limit);
 	for (i = 0; i < limit; i++) {
 		if (ab[i].c != 0) {
-			fprintf(stderr, "name2ab[%d].c    = %c\n", i, ab[i].c);
-			fprintf(stderr, "name2ab[%d].name = %s\n", i, ab[i].name);
+			message("name2ab[%d].c    = %c\n", i, ab[i].c);
+			message("name2ab[%d].name = %s\n", i, ab[i].name);
 		}
 	}
 }

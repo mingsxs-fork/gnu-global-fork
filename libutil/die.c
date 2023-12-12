@@ -32,6 +32,7 @@ static int quiet;
 static int verbose;
 static int debug;
 static void (*exit_proc)(void);
+static FILE *gout = NULL;
 
 void
 setquiet(void)
@@ -42,11 +43,19 @@ void
 setverbose(void)
 {
 	verbose = 1;
+	FILE *lp;
+	const char *logfile = getenv("GTAGSLOGGING");
+	if (logfile && (lp = fopen(logfile, "a")) != NULL)
+		gout = lp;
 }
 void
 setdebug(void)
 {
 	debug = 1;
+	FILE *lp;
+	const char *logfile = getenv("GTAGSLOGGING");
+	if (logfile && (lp = fopen(logfile, "a")) != NULL)
+		gout = lp;
 }
 void
 sethandler(void (*proc)(void))
@@ -95,12 +104,18 @@ message(const char *s, ...)
 {
 	va_list ap;
 
-	if (!quiet && verbose) {
+	if (!quiet && (verbose || debug)) {
 		va_start(ap, s);
-		(void)vfprintf(stderr, s, ap);
+		(void)vfprintf(gout ? gout : stderr, s, ap);
 		va_end(ap);
-		fputs("\n", stderr);
+		fputs("\n", gout ? gout : stderr);
 	}
+}
+void
+messagec(int ch)
+{
+	if (!quiet && (verbose || debug))
+		fputc(ch, gout ? gout : stderr);
 }
 void
 warning(const char *s, ...)
@@ -108,10 +123,24 @@ warning(const char *s, ...)
 	va_list ap;
 
 	if (!quiet) {
-		fputs("Warning: ", stderr);
+		fputs("Warning: ", gout ? gout : stderr);
 		va_start(ap, s);
-		(void)vfprintf(stderr, s, ap);
+		(void)vfprintf(gout ? gout : stderr, s, ap);
 		va_end(ap);
-		fputs("\n", stderr);
+		fputs("\n", gout ? gout : stderr);
+	}
+}
+
+void
+error(const char *s, ...)
+{
+	va_list ap;
+
+	if (!quiet) {
+		fputs("Error: ", gout ? gout : stderr);
+		va_start(ap, s);
+		(void)vfprintf(gout ? gout : stderr, s, ap);
+		va_end(ap);
+		fputs("\n", gout ? gout : stderr);
 	}
 }

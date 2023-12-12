@@ -85,11 +85,11 @@ yacc(const struct parser_param *param)
 		sign = check_malloc(++parse_level);
 		memset(sign, '-', parse_level);
 		*(sign + parse_level - 1) = '\0';
-		fprintf(stderr, " [%d] %s>START extracting YACC tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
+		message(" [%d] %s>START extracting YACC tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
 	}
 	C_family(param, TYPE_YACC);
 	if (priv_data->gconf.vflag) {
-		fprintf(stderr, " [%d] %s>END extracting YACC tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
+		message(" [%d] %s>END extracting YACC tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
 		free(sign);
 		--parse_level;
 	}
@@ -108,11 +108,11 @@ C(const struct parser_param *param)
 		sign = check_malloc(++parse_level);
 		memset(sign, '-', parse_level);
 		*(sign + parse_level - 1) = '\0';
-		fprintf(stderr, " [%d] %s>START extracting C tags of %s\n", param->gpath->seq, sign,trimpath(param->gpath->path));
+		message(" [%d] %s>START extracting C tags of %s\n", param->gpath->seq, sign,trimpath(param->gpath->path));
 	}
 	C_family(param, TYPE_C);
 	if (priv_data->gconf.vflag) {
-		fprintf(stderr, " [%d] %s>END extracting C tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
+		message(" [%d] %s>END extracting C tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
 		free(sign);
 		--parse_level;
 	}
@@ -127,7 +127,7 @@ C_family(const struct parser_param *param, int type)
 	STATIC_STRBUF(sb);
 	int c, cc;
 	int savelevel;
-	int startmacro, startsharp;
+	int startmacro;
 	const char *interested = "{}=;";
 	struct _lang_local _local = {0};
 	struct _lang_local *local = &_local;
@@ -143,9 +143,13 @@ C_family(const struct parser_param *param, int type)
 	 */
 	int yaccstatus = (type == TYPE_YACC) ? DECLARATIONS : PROGRAMS;
 	int inC = (type == TYPE_YACC) ? 0 : 1;	/* 1 while C source */
+	int nextch;
+	char savetoken[MAXTOKEN];
+	int savelineno;
+	char *saveline;
 
 	savelevel = -1;
-	startmacro = startsharp = 0;
+	startmacro = 0;
 
 	if ((T = tokenizer_open(param->gpath, NULL, local)) == NULL)
 		die("'%s' cannot open.", param->gpath->path);
@@ -157,16 +161,16 @@ C_family(const struct parser_param *param, int type)
 	while ((cc = T->op->nexttoken(interested, c_reserved_word)) != EOF) {
 		switch (cc) {
 		case SYMBOL:		/* symbol	*/
-			if (inC && T->op->peekchar(0) == '('/* ) */) {
+			nextch = T->op->peekchar(0);
+			if (inC && nextch == '('/* ) */) {
 				if (param->isnotfunction(T->token)) {
 					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 				} else if (local->level > 0 || startmacro) {
 					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
-				} else if (local->level == 0 && !startmacro && !startsharp) {
-					char arg1[MAXTOKEN], savetok[MAXTOKEN], *saveline;
-					int savelineno = T->lineno;
-
-					strlimcpy(savetok, T->token, sizeof(savetok));
+				} else if (local->level == 0 && !startmacro) {
+					char arg1[MAXTOKEN];
+					savelineno = T->lineno;
+					strlimcpy(savetoken, T->token, sizeof(savetoken));
 					strbuf_reset(sb);
 					strbuf_puts(sb, T->sp);
 					saveline = strbuf_value(sb);
@@ -186,13 +190,15 @@ C_family(const struct parser_param *param, int type)
 					 * We should assume the first argument as a function name instead of 'SCM_DEFINE'.
 					 */
 					if (function_definition(param, arg1)) {
-						if (!strcmp(savetok, "SCM_DEFINE") && *arg1)
-							strlimcpy(savetok, arg1, sizeof(savetok));
-						PUT(PARSER_DEF, savetok, savelineno, saveline);
+						if (!strcmp(savetoken, "SCM_DEFINE") && *arg1)
+							strlimcpy(savetoken, arg1, sizeof(savetoken));
+						PUT(PARSER_DEF, savetoken, savelineno, saveline);
 					} else {
-						PUT(PARSER_REF_SYM, savetok, savelineno, saveline);
+						PUT(PARSER_REF_SYM, savetoken, savelineno, saveline);
 					}
 				}
+			} else if (inC && nextch == '=' && local->level == 0 && !startmacro) {
+				PUT(PARSER_DEF, T->token, T->lineno, T->sp);
 			} else {
 				PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 			}
@@ -233,7 +239,7 @@ C_family(const struct parser_param *param, int type)
 					warning("different level before and after #define macro. reseted. [+%d %s].", T->lineno, T->gpath->path);
 				local->level = savelevel;
 			}
-			startmacro = startsharp = 0;
+			startmacro = 0;
 			break;
 		case YACC_SEP:		/* %% */
 			if (local->level != 0) {
@@ -376,12 +382,11 @@ C_family(const struct parser_param *param, int type)
 				 * This parser is too complex to maintain.
 				 * We should rewrite the whole.
 				 */
-				char savetok[MAXTOKEN];
-				int savelineno = 0;
 				int typedef_savelevel = local->level;
 				int expect_funcptr;
 
-				savetok[0] = 0;
+				savetoken[0] = 0;
+				savelineno = 0;
 
 				/* skip type qualifiers */
 				do {
@@ -430,22 +435,22 @@ C_family(const struct parser_param *param, int type)
 								break;
 							}
 							if (c == ';' && local->level == typedef_savelevel) {
-								if (savetok[0]) {
-									PUT(PARSER_DEF, savetok, savelineno, T->sp);
-									savetok[0] = 0;
+								if (savetoken[0]) {
+									PUT(PARSER_DEF, savetoken, savelineno, T->sp);
+									savetoken[0] = 0;
 								}
 								break;
 							} else if (c == '{')
 								local->level++;
 							else if (c == '}') {
-								savetok[0] = 0;
+								savetoken[0] = 0;
 								if (--local->level == typedef_savelevel)
 									break;
 							} else if (c == SYMBOL) {
 								if (local->level > typedef_savelevel)
 									PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 								/* save lastest token */
-								strlimcpy(savetok, T->token, sizeof(savetok));
+								strlimcpy(savetoken, T->token, sizeof(savetoken));
 								savelineno = T->lineno;
 							}
 						}
@@ -459,7 +464,7 @@ C_family(const struct parser_param *param, int type)
 				} else if (c == SYMBOL) {
 					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 				}
-				savetok[0] = 0;
+				savetoken[0] = 0;
 				while ((c = T->op->nexttoken("(),;*", c_reserved_word)) != EOF) {
 					switch (c) {
 					case SHARP_IFDEF:
@@ -489,17 +494,17 @@ C_family(const struct parser_param *param, int type)
 								PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 						} else {
 							/* put latest token if any */
-							if (savetok[0]) {
-								PUT(PARSER_REF_SYM, savetok, savelineno, T->sp);
+							if (savetoken[0]) {
+								PUT(PARSER_REF_SYM, savetoken, savelineno, T->sp);
 							}
 							/* save lastest token */
-							strlimcpy(savetok, T->token, sizeof(savetok));
+							strlimcpy(savetoken, T->token, sizeof(savetoken));
 							savelineno = T->lineno;
 						}
 					} else if (c == ',' || c == ';') {
-						if (savetok[0]) {
-							PUT(PARSER_DEF, savetok, T->lineno, T->sp);
-							savetok[0] = 0;
+						if (savetoken[0]) {
+							PUT(PARSER_DEF, savetoken, T->lineno, T->sp);
+							savetoken[0] = 0;
 						}
 					} else if (c == '*')
 						expect_funcptr = 1; /* expect function pointer typedef */

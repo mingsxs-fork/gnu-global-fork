@@ -163,7 +163,7 @@ varray_assign(VARRAY *vb, int index, int force)
 		vbstatistics.alloced += sizediff;
 		vbstatistics.size += sizediff;
 		if (debug)
-			fprintf(stderr, "Expanded: from %d to %d.\n", old_alloced, vb->alloced);
+			message("Expanded: from %d to %d.\n", old_alloced, vb->alloced);
 #endif
 	}
 	return (void *)(vb->vbuf + vb->size * index);

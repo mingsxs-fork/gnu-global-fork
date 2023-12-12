@@ -149,12 +149,12 @@ split_dump(SPLIT *list)
 	int i;
 	struct part *part;
 
-	fprintf(stderr, "npart: %d\n", list->npart);
+	message("npart: %d\n", list->npart);
 	
 	for (i = 0; i < list->npart; i++) {
 		part = &list->part[i];
-		fprintf(stderr, "string[%d]: |%s|\n", i, part->start);
-		fprintf(stderr, "savec[%d] : |%c|\n", i, part->savec);
+		message("string[%d]: |%s|\n", i, part->start);
+		message("savec[%d] : |%c|\n", i, part->savec);
 	}
 }
 /**

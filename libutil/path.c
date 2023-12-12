@@ -48,6 +48,7 @@
 #include "strbuf.h"
 #include "strlimcpy.h"
 #include "test.h"
+#include "die.h"
 
 #if defined(_WIN32) && !defined(__CYGWIN__)
 #define mkdir(path,mode) mkdir(path)
@@ -233,7 +234,7 @@ makedirectories(const char *base, const char *rest, int verbose)
 		p = strbuf_value(sb);
 		if (!test("d", p)) {
 			if (verbose)
-				fprintf(stderr, " Making directory '%s'.\n", p);
+				message(" Making directory '%s'.\n", p);
 			if (mkdir(p, 0775) < 0) {
 				strbuf_close(sb);
 				return -3;

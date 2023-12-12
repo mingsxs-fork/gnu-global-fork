@@ -915,9 +915,9 @@ main(int argc, char **argv)
 		localprefix = check_strdup(strbuf_value(sb));
 		strbuf_close(sb);
 #ifdef DEBUG
-		fprintf(stderr, "root=%s\n", root);
-		fprintf(stderr, "cwd=%s\n", cwd);
-		fprintf(stderr, "localprefix=%s\n", localprefix);
+		message("root=%s\n", root);
+		message("cwd=%s\n", cwd);
+		message("localprefix=%s\n", localprefix);
 #endif
 	}
 	/*
@@ -1135,7 +1135,7 @@ completion_idutils(const char *dbpath, const char *root, const char *prefix)
 		strbuf_putc(sb, '"');
 	}
 	if (debug)
-		fprintf(stderr, "completion_idutils: %s\n", strbuf_value(sb));
+		message("completion_idutils: %s\n", strbuf_value(sb));
 	if (!(ip = popen(strbuf_value(sb), "r")))
 		die("cannot execute '%s'.", strbuf_value(sb));
 #else
@@ -1159,9 +1159,9 @@ completion_idutils(const char *dbpath, const char *root, const char *prefix)
 		argv[i++] = next_string(p);		/* ^prefix */
 	argv[i] = NULL;
 	if (debug) {
-		fprintf(stderr, "completion_idutils: \n");
+		message("completion_idutils: \n");
 		for (i = 0; argv[i] != NULL; i++) 
-			fprintf(stderr, "argv[%d] = |%s|\n", i, argv[i]);
+			message("argv[%d] = |%s|\n", i, argv[i]);
 	}
 	if (!(ip = secure_popen(lid, "r", argv)))
 		die("cannot execute '%s'.", lid);
@@ -1283,13 +1283,13 @@ print_count(int number)
 
 	switch (number) {
 	case 0:
-		fprintf(stderr, "object not found");
+		message("object not found");
 		break;
 	case 1:
-		fprintf(stderr, "1 %s located", target);
+		message("1 %s located", target);
 		break;
 	default:
-		fprintf(stderr, "%d %ss located", number, target);
+		message("%d %ss located", number, target);
 		break;
 	}
 }
@@ -1355,7 +1355,7 @@ idutils(const char *pattern, const char *dbpath)
 	strbuf_putc(ib, ' ');
 	strbuf_puts(ib, quote_shell(pattern));
 	if (debug)
-		fprintf(stderr, "idutils: %s\n", strbuf_value(ib));
+		message("idutils: %s\n", strbuf_value(ib));
 	if (!(ip = popen(strbuf_value(ib), "r")))
 		die("cannot execute '%s'.", strbuf_value(ib));
 #else
@@ -1385,9 +1385,9 @@ idutils(const char *pattern, const char *dbpath)
 	argv[i++] = next_string(p);			/* pattern */
 	argv[i] = NULL;
 	if (debug) {
-		fprintf(stderr, "idutils: \n");
+		message("idutils: \n");
 		for (i = 0; argv[i] != NULL; i++) 
-			fprintf(stderr, "argv[%d] = |%s|\n", i, argv[i]);
+			message("argv[%d] = |%s|\n", i, argv[i]);
 	}
 	if (!(ip = secure_popen(lid, "r", argv)))
 		die("cannot execute '%s'.", strbuf_value(ib));
@@ -1447,7 +1447,7 @@ idutils(const char *pattern, const char *dbpath)
 	strbuf_close(ib);
 	if (vflag) {
 		print_count(count);
-		fprintf(stderr, " (using idutils index in '%s').\n", dbpath);
+		message(" (using idutils index in '%s').\n", dbpath);
 	}
 }
 /**
@@ -1576,7 +1576,7 @@ grep(const char *pattern, char *const *argv, const char *dbpath)
 		regfree(&preg);
 	if (vflag) {
 		print_count(count);
-		fprintf(stderr, " (no index used).\n");
+		message(" (no index used).\n");
 	}
 }
 /**
@@ -1659,16 +1659,16 @@ pathlist(const char *pattern, const char *dbpath)
 	if (vflag) {
 		switch (count) {
 		case 0:
-			fprintf(stderr, "file not found");
+			message("file not found");
 			break;
 		case 1:
-			fprintf(stderr, "1 file located");
+			message("1 file located");
 			break;
 		default:
-			fprintf(stderr, "%d files located", count);
+			message("%d files located", count);
 			break;
 		}
-		fprintf(stderr, " (using '%s').\n", makepath(dbpath, dbname(GPATH), NULL));
+		message(" (using '%s').\n", makepath(dbpath, dbname(GPATH), NULL));
 	}
 }
 /**
@@ -1854,7 +1854,7 @@ parsefile(char *const *argv, const char *cwd, const char *root, const char *dbpa
 	strbuf_close(sb);
 	if (vflag) {
 		print_count(count);
-		fprintf(stderr, " (no index used).\n");
+		message(" (no index used).\n");
 	}
 }
 /**
@@ -1983,7 +1983,7 @@ tagsearch(const char *pattern, const char *cwd, const char *root, const char *db
 	if (vflag) {
 		print_count(total);
 		if (!Tflag)
-			fprintf(stderr, " (using '%s')", makepath(dbpath, dbname(db), NULL));
+			message(" (using '%s')", makepath(dbpath, dbname(db), NULL));
 		fputs(".\n", stderr);
 	}
 }

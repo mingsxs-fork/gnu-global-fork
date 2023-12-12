@@ -417,7 +417,7 @@ parse_file(struct gtags_path *gpath, int flags, PARSER_CALLBACK put, void *arg)
 	const struct lang_entry *ent = get_parser(gpath->path);
 	if (ent) {
 		if (flags & PARSER_EXPLAIN)
-			fputs(get_explain(gpath->path, ent), stderr);
+			message(get_explain(gpath->path, ent));
 		execute_parser(ent, gpath, flags, put, arg);
 	}
 }
@@ -478,8 +478,8 @@ get_explain(const char *path, const struct lang_entry *ent)
 void
 dbg_print(int level, const char *s)
 {
-	fprintf(stderr, "[%04d]", lineno);
+	message("[%04d]", lineno);
 	for (; level > 0; level--)
-		fprintf(stderr, "    ");
-	fprintf(stderr, "%s\n", s);
+		message("    ");
+	message("%s\n", s);
 }

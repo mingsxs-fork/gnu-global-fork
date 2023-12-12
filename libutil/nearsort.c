@@ -49,7 +49,7 @@ set_nearbase_path(const char *path)
 	if (root[0] == '\0' || realpath(path, real) == NULL)
 		return NULL;
 #ifdef DEBUG
-	fprintf(stderr, "realpath = %s\n", real);
+	message("realpath = %s\n", real);
 #endif
 	if (locatestring(real, root, MATCH_AT_FIRST) == NULL)
 		return NULL;
@@ -62,7 +62,7 @@ set_nearbase_path(const char *path)
 		slash = "";
 	snprintf(nearbase, sizeof(nearbase), "./%s%s", real + strlen(root) + 1, slash);
 #ifdef DEBUG
-	fprintf(stderr, "nearbase = %s\n", nearbase);
+	message("nearbase = %s\n", nearbase);
 #endif
 	return nearbase;
 }
@@ -76,7 +76,7 @@ get_nearness(const char *p1, const char *p2)
 {
 	int parts = 0;
 #ifdef DEBUG
-	fprintf(stderr, "get_nearness(%s, %s)", p1, p2);
+	message("get_nearness(%s, %s)", p1, p2);
 #endif
 	for (; *p1 && *p2; p1++, p2++) {
 		if (*p1 != *p2)
@@ -91,7 +91,7 @@ get_nearness(const char *p1, const char *p2)
 	if (*p1 == 0 && *p2 == 0 && *(p1 - 1) != '/')
 		parts++;
 #ifdef DEBUG
-        fprintf(stderr, " => %d\n", parts);
+        message(" => %d\n", parts);
 
 #endif
 	return parts;

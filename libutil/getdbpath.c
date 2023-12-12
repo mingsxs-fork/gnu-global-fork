@@ -72,7 +72,7 @@ setupvariables(int verbose)
 	{
 		gtagsobjdirprefix = p;
 		if (verbose)
-			fprintf(stderr, "GTAGSOBJDIRPREFIX is set to '%s'.\n", p);
+			message("GTAGSOBJDIRPREFIX is set to '%s'.\n", p);
 	} else {
 		gtagsobjdirprefix = "/usr/obj";
 	}
@@ -81,7 +81,7 @@ setupvariables(int verbose)
 	{
 		gtagsobjdir = p;
 		if (verbose)
-			fprintf(stderr, "GTAGSOBJDIR is set to '%s'.\n", p);
+			message("GTAGSOBJDIR is set to '%s'.\n", p);
 	} else {
 		gtagsobjdir = "obj";
 	}
@@ -108,7 +108,7 @@ getobjdir(const char *candidate, int verbose)
 		if (!test("drw", path))
 			die("Found objdir '%s', but you don't have read/write permission for it.", path);
 		if (verbose)
-			fprintf(stderr, "Using objdir '%s'.\n", path);
+			message("Using objdir '%s'.\n", path);
 		return path;
 	}
 #if !defined(_WIN32) && !defined(__DJGPP__)
@@ -118,13 +118,13 @@ getobjdir(const char *candidate, int verbose)
 			if (!test("drw", path))
 				die("Found objdir '%s', but you don't have read/write permission for it.", path);
 			if (verbose)
-				fprintf(stderr, "Using objdir '%s'.\n", path);
+				message("Using objdir '%s'.\n", path);
 			return path;
 		}
 		if (makedirectories(gtagsobjdirprefix, candidate + 1, verbose) < 0)
 			die("Found the base for objdir '%s', but you cannot create new directory in it.", path);
 		if (verbose)
-			fprintf(stderr, "Using objdir '%s'.\n", path);
+			message("Using objdir '%s'.\n", path);
 		return path;
 	}
 #endif
@@ -161,20 +161,20 @@ gtagsexist(const char *candidate, char *dbpath, int size, int verbose)
 		candidate_without_slash = candidate;
 	snprintf(path, sizeof(path), "%s/%s", candidate_without_slash, dbname(GTAGS));
 	if (verbose)
-		fprintf(stderr, "checking %s\n", path);
+		message("checking %s\n", path);
 	if (test("fr", path)) {
 		if (verbose)
-			fprintf(stderr, "GTAGS found at '%s'.\n", path);
+			message("GTAGS found at '%s'.\n", path);
 		snprintf(dbpath, size, "%s", candidate);
 		return 1;
 	}
 	snprintf(path, sizeof(path),
 		"%s/%s/%s", candidate_without_slash, gtagsobjdir, dbname(GTAGS));
 	if (verbose)
-		fprintf(stderr, "checking %s\n", path);
+		message("checking %s\n", path);
 	if (test("fr", path)) {
 		if (verbose)
-			fprintf(stderr, "GTAGS found at '%s'.\n", path);
+			message("GTAGS found at '%s'.\n", path);
 		snprintf(dbpath, size, "%s/%s", candidate_without_slash, gtagsobjdir);
 		return 1;
 	}
@@ -182,10 +182,10 @@ gtagsexist(const char *candidate, char *dbpath, int size, int verbose)
 	snprintf(path, sizeof(path),
 		"%s%s/%s", gtagsobjdirprefix, candidate_without_slash, dbname(GTAGS));
 	if (verbose)
-		fprintf(stderr, "checking %s\n", path);
+		message("checking %s\n", path);
 	if (test("fr", path)) {
 		if (verbose)
-			fprintf(stderr, "GTAGS found at '%s'.\n", path);
+			message("GTAGS found at '%s'.\n", path);
 		snprintf(dbpath, size, "%s%s", gtagsobjdirprefix, candidate_without_slash);
 		return 1;
 	}
@@ -224,7 +224,7 @@ setupdbpath(int verbose)
 
 	if ((p = getenv("GTAGSROOT")) != NULL) {
 		if (verbose)
-			fprintf(stderr, "GTAGSROOT is set to '%s'.\n", p);
+			message("GTAGSROOT is set to '%s'.\n", p);
 		if (!isabspath(p)) {
 			gtags_dbpath_error = "GTAGSROOT must be an absolute path.";
 			return -1;
@@ -248,7 +248,7 @@ setupdbpath(int verbose)
 		 */
 		if ((p = getenv("GTAGSDBPATH")) != NULL) {
 			if (verbose)
-				fprintf(stderr, "GTAGSDBPATH is set to '%s'.\n", p);
+				message("GTAGSDBPATH is set to '%s'.\n", p);
 			if (!isabspath(p)) {
 				gtags_dbpath_error = "GTAGSDBPATH must be an absolute path.";
 				return -1;
@@ -267,7 +267,7 @@ setupdbpath(int verbose)
 		}
 	} else {
 		if (verbose && getenv("GTAGSDBPATH"))
-			fprintf(stderr, "warning: GTAGSDBPATH is ignored because GTAGSROOT is not set.\n");
+			message("warning: GTAGSDBPATH is ignored because GTAGSROOT is not set.\n");
 		/*
 		 * start from current directory to '/' directory.
 		 */
@@ -304,7 +304,7 @@ setupdbpath(int verbose)
 			fp = fopen(path, "r");
 			if (fp == NULL) {
 				if (verbose)
-					fprintf(stderr, "'%s' ignored because it cannot be opened.\n", path);
+					message("'%s' ignored because it cannot be opened.\n", path);
 				break;
 			}
 			sb = strbuf_open(0);
@@ -312,17 +312,17 @@ setupdbpath(int verbose)
 			if (s == NULL) {
 				/* Empty file? */
 				if (verbose)
-					fprintf(stderr, "'%s' ignored; strbuf_fgets() returned NULL.\n", path);
+					message("'%s' ignored; strbuf_fgets() returned NULL.\n", path);
 				goto ignore_lab;
 			}
 			if (!test("d", s)) {	/* XXX: if s == NULL, test() will use previous path used. */
 				if (verbose)
-					fprintf(stderr, "'%s' ignored because it doesn't include existent directory name.\n", path);
+					message("'%s' ignored because it doesn't include existent directory name.\n", path);
 			} else {
 				char buf[MAXPATHLEN];
 
 				if (verbose)
-					fprintf(stderr, "GTAGSROOT found at '%s'.\n", path);
+					message("GTAGSROOT found at '%s'.\n", path);
 				if (!isabspath(s))
 					s = realpath(makepath(root, s, NULL), buf);
 				strlimcpy(root, s, MAXPATHLEN);
@@ -391,7 +391,7 @@ get_relative_cwd_with_slash(void)
 void
 dump_dbpath(void)
 {
-	fprintf(stderr, "db path: %s\n", dbpath);
-	fprintf(stderr, "root path: %s\n", root);
-	fprintf(stderr, "current directory: %s\n", cwd);
+	message("db path: %s\n", dbpath);
+	message("root path: %s\n", root);
+	message("current directory: %s\n", cwd);
 }

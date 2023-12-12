@@ -779,11 +779,11 @@ gtags_restart(GTOP *gtop)
 		gtop->key = gtop->prefix;
 		gtop->prefix = NULL;
 		if (gtop->openflags & GTAGS_DEBUG)
-			fprintf(stderr, "Using prefix: %s\n", gtop->key);
+			message("Using prefix: %s\n", gtop->key);
 		return 1;
 	}
 	if (gtop->openflags & GTAGS_DEBUG)
-		fprintf(stderr, "gtags_restart: not prepared.\n");
+		message("gtags_restart: not prepared.\n");
 	return 0;
 }
 /**
@@ -859,7 +859,7 @@ gtags_first(GTOP *gtop, const char *pattern, int flags)
 			gtop->prefix = get_prefix(pattern, flags);
 			if (gtop->openflags & GTAGS_DEBUG)
 				if (gtop->prefix != NULL)
-					fprintf(stderr, "Using prefix: %s\n", gtop->prefix);
+					message("Using prefix: %s\n", gtop->prefix);
 			if (gtop->prefix == NULL)
 				die("gtags_first: impossible (1).");
 			strbuf_putc(regex, '^');
@@ -868,7 +868,7 @@ gtags_first(GTOP *gtop, const char *pattern, int flags)
 				strbuf_putc(regex, '$');
 		} else if (*pattern == '^' && (gtop->prefix = get_prefix(pattern, flags)) != NULL) {
 			if (gtop->openflags & GTAGS_DEBUG)
-				fprintf(stderr, "Using prefix: %s\n", gtop->prefix);
+				message("Using prefix: %s\n", gtop->prefix);
 			strbuf_puts(regex, pattern);
 		} else {
 			strbuf_puts(regex, pattern);
@@ -881,7 +881,7 @@ gtags_first(GTOP *gtop, const char *pattern, int flags)
 			gtop->preg = NULL;
 		} else if (*pattern == '^' && (gtop->key = get_prefix(pattern, flags)) != NULL) {
 			if (gtop->openflags & GTAGS_DEBUG)
-				fprintf(stderr, "Using prefix: %s\n", gtop->key);
+				message("Using prefix: %s\n", gtop->key);
 			gtop->dbflags |= DBOP_PREFIX;
 			gtop->preg = NULL;
 		} else {
@@ -1076,8 +1076,8 @@ again3:
 void
 gtags_show_statistics(GTOP *gtop)
 {
-	fprintf(stderr, "Numbers of gtags (%s): %d\n", dbname(gtop->db), gtop->readcount);
-	fprintf(stderr, "Numbers of dbop  (%s): %d\n", dbname(gtop->db), gtop->dbop->readcount);
+	message("Numbers of gtags (%s): %d\n", dbname(gtop->db), gtop->readcount);
+	message("Numbers of dbop  (%s): %d\n", dbname(gtop->db), gtop->dbop->readcount);
 }
 /**
  * gtags_close: close tag file

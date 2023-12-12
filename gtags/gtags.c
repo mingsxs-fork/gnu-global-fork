@@ -279,13 +279,13 @@ main(int argc, char **argv)
 			skip_hook++;
 		if (skip_hook) {
 			if (debug)
-				fprintf(stderr, "Gtags_hook is skipped.\n");
+				message("Gtags_hook is skipped.\n");
 		} else if (getconfs("gtags_hook", sb)) {
 			char *p = serialize_options(argc, argv);
 			set_env("GTAGS_COMMANDLINE", p);
 			free(p);
 			if (system(strbuf_value(sb)))
-				fprintf(stderr, "gtags-hook failed: %s\n", strbuf_value(sb));
+				message("gtags-hook failed: %s\n", strbuf_value(sb));
 		}
 	}
 	logging_arguments(argc, argv);
@@ -536,24 +536,24 @@ main(int argc, char **argv)
 		const char *config_path = getconfigpath();
 		const char *config_label = getconfiglabel();
 
-		fprintf(stderr, "[%s] Gtags started.\n", now());
+		message("[%s] Gtags started.\n", now());
 		if (config_path)
-			fprintf(stderr, " Using configuration file '%s'.\n", config_path);
+			message(" Using configuration file '%s'.\n", config_path);
 		else {
-			fprintf(stderr, " Using default configuration.\n");
+			message(" Using default configuration.\n");
 			if (getenv("GTAGSLABEL"))
-				fprintf(stderr, " GTAGSLABEL(--gtagslabel) ignored since configuration file not found.\n");
+				message(" GTAGSLABEL(--gtagslabel) ignored since configuration file not found.\n");
 		}
 		if (config_label)
-			fprintf(stderr, " Using configuration label '%s'.\n", config_label);
+			message(" Using configuration label '%s'.\n", config_label);
 		if (file_list)
-			fprintf(stderr, " Using '%s' as a file list.\n", file_list);
+			message(" Using '%s' as a file list.\n", file_list);
 	}
 	/*
 	 * initialize parser.
 	 */
 	if (vflag && gtags_parser)
-		fprintf(stderr, " Using plug-in parser.\n");
+		message(" Using plug-in parser.\n");
 	parser_init(langmap, gtags_parser);
 	/*
 	 * Start statistics.
@@ -594,7 +594,7 @@ main(int argc, char **argv)
 
 		tim = statistics_time_start("Time of creating ID");
 		if (vflag)
-			fprintf(stderr, "[%s] Creating indexes for idutils.\n", now());
+			message("[%s] Creating indexes for idutils.\n", now());
 		strbuf_reset(sb);
 		/*
 		 * Since idutils stores the value of PWD in ID file, we need to
@@ -621,7 +621,7 @@ main(int argc, char **argv)
 			strbuf_puts(sb, " 2>&1");
 		}
 		if (debug)
-			fprintf(stderr, "executing mkid like: %s\n", strbuf_value(sb));
+			message("executing mkid like: %s\n", strbuf_value(sb));
 		op = popen(strbuf_value(sb), "w");
 		if (op == NULL)
 			die("cannot execute '%s'.", strbuf_value(sb));
@@ -639,7 +639,7 @@ main(int argc, char **argv)
 		statistics_time_end(tim);
 	}
 	if (vflag)
-		fprintf(stderr, "[%s] Done.\n", now());
+		message("[%s] Done.\n", now());
 	closeconf();
 	strbuf_close(sb);
 	print_statistics(statistics);
@@ -678,8 +678,8 @@ incremental(const char *dbpath, const char *root)
 
 	tim = statistics_time_start("Time of inspecting %s and %s.", dbname(GTAGS), dbname(GRTAGS));
 	if (vflag) {
-		fprintf(stderr, " Tag found in '%s'.\n", dbpath);
-		fprintf(stderr, " Incremental updating.\n");
+		message(" Tag found in '%s'.\n", dbpath);
+		message(" Incremental updating.\n");
 	}
 	/*
 	 * get modified time of GTAGS.
@@ -799,7 +799,7 @@ incremental(const char *dbpath, const char *root)
 			const char *start, *end, *p;
 
 			if (vflag)
-				fprintf(stderr, "[%s] Updating '%s'.\n", now(), dbname(GPATH));
+				message("[%s] Updating '%s'.\n", now(), dbname(GPATH));
 			/* gpath_open(dbpath, 2); */
 			if (strbuf_getlen(deletelist) > 0) {
 				start = strbuf_value(deletelist);
@@ -829,10 +829,10 @@ incremental(const char *dbpath, const char *root)
 exit:
 	if (vflag) {
 		if (updated)
-			fprintf(stderr, " Global databases have been modified.\n");
+			message(" Global databases have been modified.\n");
 		else
-			fprintf(stderr, " Global databases are up to date.\n");
-		fprintf(stderr, "[%s] Done.\n", now());
+			message(" Global databases are up to date.\n");
+		message("[%s] Done.\n", now());
 	}
 	strbuf_close(addlist);
 	strbuf_close(deletelist);
@@ -862,7 +862,7 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 	g_priv_data.proc_data = &proc_data;
 
 	if (vflag)
-		fprintf(stderr, "[%s] Updating '%s' and '%s'.\n", now(), dbname(GTAGS), dbname(GRTAGS));
+		message("[%s] Updating '%s' and '%s'.\n", now(), dbname(GTAGS), dbname(GRTAGS));
 	/*
 	 * Open tag files.
 	 */
@@ -891,7 +891,7 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 				path = gpath_fid2path(fid, NULL);
 				if (path == NULL)
 					die("GPATH is corrupted.");
-				fprintf(stderr, " [%d/%d] deleting tags of %s\n", seqno++, total, path + 2);
+				message(" [%d/%d] deleting tags of %s\n", seqno++, total, path + 2);
 			}
 		}
 		gtags_delete(proc_data.gtop[GTAGS], deleteset);
@@ -929,7 +929,7 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 			die("GPATH is corrupted.('%s' not found)", gpath.path);
 		gpath.seq = ++seqno;
 		if (vflag)
-			fprintf(stderr, " [%d/%d] extracting tags of %s\n", seqno, total, trimpath(gpath.path));
+			message(" [%d/%d] extracting tags of %s\n", seqno, total, trimpath(gpath.path));
 		parse_file(&gpath, g_priv_data.gconf.parser_flags, gtags_put_symbol, &g_priv_data);
 		gtags_flush(proc_data.gtop[GTAGS], gpath.fid);
 		if (proc_data.gtop[GRTAGS] != NULL)
@@ -967,7 +967,7 @@ createtags(const char *dbpath, const char *root)
 
 	tim = statistics_time_start("Time of creating %s and %s.", dbname(GTAGS), dbname(GRTAGS));
 	if (vflag)
-		fprintf(stderr, "[%s] Creating '%s' and '%s'.\n", now(), dbname(GTAGS), dbname(GRTAGS));
+		message("[%s] Creating '%s' and '%s'.\n", now(), dbname(GTAGS), dbname(GRTAGS));
 	openflags = cflag ? GTAGS_COMPACT : 0;
 #ifdef USE_SQLITE3
 	if (use_sqlite3)
@@ -1005,14 +1005,14 @@ createtags(const char *dbpath, const char *root)
 	if (getconfs("GTAGS_extra", sb)) {
 		tim = statistics_time_start("Time of executing GTAGS_extra command");
 		if (system(strbuf_value(sb)))
-			fprintf(stderr, "GTAGS_extra command failed: %s\n", strbuf_value(sb));
+			message("GTAGS_extra command failed: %s\n", strbuf_value(sb));
 		statistics_time_end(tim);
 	}
 	strbuf_reset(sb);
 	if (getconfs("GRTAGS_extra", sb)) {
 		tim = statistics_time_start("Time of executing GRTAGS_extra command");
 		if (system(strbuf_value(sb)))
-			fprintf(stderr, "GRTAGS_extra command failed: %s\n", strbuf_value(sb));
+			message("GRTAGS_extra command failed: %s\n", strbuf_value(sb));
 		statistics_time_end(tim);
 	}
 	strbuf_close(sb);

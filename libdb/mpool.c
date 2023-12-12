@@ -56,6 +56,7 @@ static char sccsid[] = "@(#)mpool.c	8.5 (Berkeley) 7/26/94";
 
 #include "queue.h"
 #include "db.h"
+#include "die.h"
 
 #define	__MPOOLINTERFACE_PRIVATE
 #include "mpool.h"
@@ -146,7 +147,7 @@ mpool_new(mp, pgnoaddr)
 	BKT *bp;
 
 	if (mp->npages == MAX_PAGE_NUMBER) {
-		(void)fprintf(stderr, "mpool_new: page allocation overflow.\n");
+		(void)error("mpool_new: page allocation overflow.\n");
 		abort();
 	}
 #ifdef STATISTICS
@@ -201,8 +202,7 @@ mpool_get(mp, pgno, flags)
 	if ((bp = mpool_look(mp, pgno)) != NULL) {
 #ifdef DEBUG
 		if (bp->flags & MPOOL_PINNED) {
-			(void)fprintf(stderr,
-			    "mpool_get: page %d already pinned\n", bp->pgno);
+			(void)error("mpool_get: page %d already pinned\n", bp->pgno);
 			abort();
 		}
 #endif
@@ -305,8 +305,7 @@ mpool_put(mp, page, flags)
 	bp = (BKT *)((char *)page - sizeof(BKT));
 #ifdef DEBUG
 	if (!(bp->flags & MPOOL_PINNED)) {
-		(void)fprintf(stderr,
-		    "mpool_put: page %d not pinned\n", bp->pgno);
+		(void)error("mpool_put: page %d not pinned\n", bp->pgno);
 		abort();
 	}
 #endif
@@ -504,31 +503,29 @@ mpool_stat(mp)
 	int cnt;
 	char *sep;
 
-	(void)fprintf(stderr, "%lu pages in the file\n", (long unsigned int)mp->npages);
-	(void)fprintf(stderr,
-	    "page size %lu, cacheing %lu pages of %lu page max cache\n",
+	(void)message("%lu pages in the file\n", (long unsigned int)mp->npages);
+	(void)message("page size %lu, cacheing %lu pages of %lu page max cache\n",
 	    mp->pagesize, (long unsigned int)mp->curcache, (long unsigned int)mp->maxcache);
-	(void)fprintf(stderr, "%lu page puts, %lu page gets, %lu page new\n",
+	(void)message("%lu page puts, %lu page gets, %lu page new\n",
 	    mp->pageput, mp->pageget, mp->pagenew);
-	(void)fprintf(stderr, "%lu page allocs, %lu page flushes\n",
+	(void)message("%lu page allocs, %lu page flushes\n",
 	    mp->pagealloc, mp->pageflush);
 	if (mp->cachehit + mp->cachemiss)
-		(void)fprintf(stderr,
-		    "%.0f%% cache hit rate (%lu hits, %lu misses)\n", 
+		(void)message("%.0f%% cache hit rate (%lu hits, %lu misses)\n", 
 		    ((double)mp->cachehit / (mp->cachehit + mp->cachemiss))
 		    * 100, mp->cachehit, mp->cachemiss);
-	(void)fprintf(stderr, "%lu page reads, %lu page writes\n",
+	(void)message("%lu page reads, %lu page writes\n",
 	    mp->pageread, mp->pagewrite);
 
 	sep = "";
 	cnt = 0;
 	for (bp = mp->lqh.cqh_first;
 	    bp != (void *)&mp->lqh; bp = bp->q.cqe_next) {
-		(void)fprintf(stderr, "%s%d", sep, bp->pgno);
+		(void)message("%s%d", sep, bp->pgno);
 		if (bp->flags & MPOOL_DIRTY)
-			(void)fprintf(stderr, "d");
+			(void)message("d");
 		if (bp->flags & MPOOL_PINNED)
-			(void)fprintf(stderr, "P");
+			(void)message("P");
 		if (++cnt == 10) {
 			sep = "\n";
 			cnt = 0;
@@ -536,6 +533,6 @@ mpool_stat(mp)
 			sep = ", ";
 			
 	}
-	(void)fprintf(stderr, "\n");
+	(void)message("\n");
 }
 #endif
