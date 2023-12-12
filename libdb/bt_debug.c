@@ -49,6 +49,7 @@ static char sccsid[] = "@(#)bt_debug.c	8.5 (Berkeley) 8/17/94";
 
 #include "db.h"
 #include "btree.h"
+#include "die.h"
 
 /**
  * BT_DUMP -- Dump the tree

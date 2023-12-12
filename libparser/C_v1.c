@@ -300,9 +300,9 @@ C_family(const struct parser_param *param, int type)
 				PUT(PARSER_DEF, T->token, T->lineno, T->sp);
 			}
 			break;
+		case SHARP_IMPORT:
 		case SHARP_INCLUDE:
 		case SHARP_INCLUDE_NEXT:
-		case SHARP_IMPORT:
 		case SHARP_ERROR:
 		case SHARP_LINE:
 		case SHARP_PRAGMA:
@@ -572,10 +572,10 @@ static int
 function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 {
 	int c;
-	int brace_level, isdefine, symbols;
+	int brace_level;
 	int accept_arg1 = 0;
 
-	brace_level = isdefine = symbols = 0;
+	brace_level = 0;
 	while ((c = T->op->nexttoken("()", c_reserved_word)) != EOF) {
 		switch (c) {
 		case SHARP_IFDEF:
@@ -630,26 +630,16 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 			brace_level++;
 		else if (c == /* ( */')' || c == ']')
 			brace_level--;
-		else if (brace_level == 0 && c != C___THROW)
-			if (IS_RESERVED_WORD(c))
-				isdefine = 1;
-			else if (c == SYMBOL) {
-				if (symbols > 1)
-					isdefine = 1;
-				else
-					symbols ++;
-			}
-		else if (c == ';' || c == ',') {
-			if (!isdefine)
-				break;
-		} else if (c == '{' /* } */) {
+		else if (brace_level == 0 && (c == ';' || c == ','))
+			break;
+		else if (c == '{' /* } */) {
 			T->op->pushbacktoken();
 			return 1;
-		} else if (c == /* { */'}')
+		} else if (c == /* { */'}') {
+			T->op->pushbacktoken();
 			break;
-		else if (c == '=')
+		} else if (c == '=')
 			break;
-
 		/* pick up symbol */
 		if (c == SYMBOL)
 			PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);

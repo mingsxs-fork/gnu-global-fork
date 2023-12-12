@@ -417,7 +417,7 @@ parse_file(struct gtags_path *gpath, int flags, PARSER_CALLBACK put, void *arg)
 	const struct lang_entry *ent = get_parser(gpath->path);
 	if (ent) {
 		if (flags & PARSER_EXPLAIN)
-			message(get_explain(gpath->path, ent));
+			message("%s", get_explain(gpath->path, ent));
 		execute_parser(ent, gpath, flags, put, arg);
 	}
 }

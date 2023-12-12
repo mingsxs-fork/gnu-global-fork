@@ -76,7 +76,7 @@ Cpp(const struct parser_param *param)
 	STATIC_STRBUF(sb);
 	int c, cc;
 	int savelevel;
-	int startclass, startthrow, startmacro, startsharp, startequal;
+	int startclass, startthrow, startmacro, startequal;
 	char classname[MAXTOKEN];
 	char completename[MAXCOMPLETENAME];
 	char *completename_limit = &completename[sizeof(completename)];
@@ -89,6 +89,9 @@ Cpp(const struct parser_param *param)
 	const char *interested = "{}=;~";
 	struct _lang_local _local = {0};
 	struct _lang_local *local = &_local;
+	char savetoken[MAXTOKEN];
+	int savelineno;
+	char *saveline;
 
 	*classname = *completename = 0;
 	stack[0].classname = completename;
@@ -96,7 +99,7 @@ Cpp(const struct parser_param *param)
 	stack[0].level = 0;
 	local->level = classlevel = local->piflevel = local->namespacelevel = 0;
 	savelevel = -1;
-	startclass = startthrow = startmacro = startsharp = startequal = 0;
+	startclass = startthrow = startmacro = startequal = 0;
 
 	if ((T = tokenizer_open(param->gpath, NULL, local)) == NULL)
 		die("'%s' cannot open.", param->gpath->path);
@@ -116,22 +119,22 @@ Cpp(const struct parser_param *param)
 					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 				} else if (local->level > stack[classlevel].level || startequal || startmacro) {
 					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
-				} else if (local->level == stack[classlevel].level && !startmacro && !startsharp && !startequal) {
-					char savetok[MAXTOKEN], *saveline;
-					int savelineno = T->lineno;
-
-					strlimcpy(savetok, T->token, sizeof(savetok));
+				} else if (local->level == stack[classlevel].level && !startmacro && !startequal) {
+					savelineno = T->lineno;
+					strlimcpy(savetoken, T->token, sizeof(savetoken));
 					strbuf_reset(sb);
 					strbuf_puts(sb, T->sp);
 					saveline = strbuf_value(sb);
 					if (function_definition(param)) {
 						/* ignore constructor */
-						if (strcmp(stack[classlevel].classname, savetok))
-							PUT(PARSER_DEF, savetok, savelineno, saveline);
+						if (strcmp(stack[classlevel].classname, savetoken))
+							PUT(PARSER_DEF, savetoken, savelineno, saveline);
 					} else {
-						PUT(PARSER_REF_SYM, savetok, savelineno, saveline);
+						PUT(PARSER_REF_SYM, savetoken, savelineno, saveline);
 					}
 				}
+			} else if (T->op->peekchar(0) == '=' && local->level == 0 && !startmacro && !startthrow && !startequal && !startclass) {
+				PUT(PARSER_DEF, T->token, T->lineno, T->sp);
 			} else {
 				PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 			}
@@ -151,17 +154,15 @@ Cpp(const struct parser_param *param)
 					T->op->pushbacktoken();
 				}
 			} else if (c  == SYMBOL) {
-				char savetok[MAXTOKEN], *saveline;
-				int savelineno = T->lineno;
-
-				strlimcpy(savetok, T->token, sizeof(savetok));
+				savelineno = T->lineno;
+				strlimcpy(savetoken, T->token, sizeof(savetoken));
 				strbuf_reset(sb);
 				strbuf_puts(sb, T->sp);
 				saveline = strbuf_value(sb);
 				if ((c = T->op->nexttoken(interested, cpp_reserved_word)) == '=') {
-					PUT(PARSER_DEF, savetok, savelineno, saveline);
+					PUT(PARSER_DEF, savetoken, savelineno, saveline);
 				} else {
-					PUT(PARSER_REF_SYM, savetok, savelineno, saveline);
+					PUT(PARSER_REF_SYM, savetoken, savelineno, saveline);
 					while (c == SYMBOL) {
 						PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 						c = T->op->nexttoken(interested, cpp_reserved_word);
@@ -273,7 +274,7 @@ Cpp(const struct parser_param *param)
 		case '{':  /* } */
 			DBG_PRINT(local->level, "{"); /* } */
 			++local->level;
-			if ((param->flags & PARSER_BEGIN_BLOCK) && atfirst) {
+			if ((param->flags & PARSER_BEGIN_BLOCK) && cp_at_first(T)) {
 				if ((param->flags & PARSER_WARNING) && local->level != 1)
 					warning("forced level 1 block start by '{' at column 0 [+%d %s].", T->lineno, T->gpath->path); /* } */
 				local->level = 1;
@@ -304,7 +305,7 @@ Cpp(const struct parser_param *param)
 					warning("missing left '{' [+%d %s].", T->lineno, T->gpath->path); /* } */
 				local->level = 0;
 			}
-			if ((param->flags & PARSER_END_BLOCK) && atfirst) {
+			if ((param->flags & PARSER_END_BLOCK) && cp_at_first(T)) {
 				if ((param->flags & PARSER_WARNING) && local->level != 0)
 					/* { */
 					warning("forced level 0 block end by '}' at column 0 [+%d %s].", T->lineno, T->gpath->path);
@@ -332,7 +333,7 @@ Cpp(const struct parser_param *param)
 					warning("different level before and after #define macro. reseted. [+%d %s].", T->lineno, T->gpath->path);
 				local->level = savelevel;
 			}
-			startmacro = startsharp = 0;
+			startmacro = 0;
 			break;
 		/*
 		 * #xxx
@@ -464,12 +465,12 @@ Cpp(const struct parser_param *param)
 				 * This parser is too complex to maintain.
 				 * We should rewrite the whole.
 				 */
-				char savetok[MAXTOKEN];
-				int savelineno = 0;
 				int typedef_savelevel = local->level;
 				int templates = 0;
+				int expect_funcptr;
 
-				savetok[0] = 0;
+				savetoken[0] = 0;
+				savelineno = 0;
 
 				/* skip CV qualifiers */
 				do {
@@ -518,22 +519,22 @@ Cpp(const struct parser_param *param)
 								break;
 							}
 							if (c == ';' && local->level == typedef_savelevel) {
-								if (savetok[0]) {
-									PUT(PARSER_DEF, savetok, savelineno, T->sp);
-									savetok[0] = 0;
+								if (savetoken[0]) {
+									PUT(PARSER_DEF, savetoken, savelineno, T->sp);
+									savetoken[0] = 0;
 								}
 								break;
 							} else if (c == '{')
 								local->level++;
 							else if (c == '}') {
-								savetok[0] = 0;
+								savetoken[0] = 0;
 								if (--local->level == typedef_savelevel)
 									break;
 							} else if (c == SYMBOL) {
 								if (local->level > typedef_savelevel)
 									PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 								/* save lastest token */
-								strlimcpy(savetok, T->token, sizeof(savetok));
+								strlimcpy(savetoken, T->token, sizeof(savetoken));
 								savelineno = T->lineno;
 							}
 						}
@@ -547,8 +548,8 @@ Cpp(const struct parser_param *param)
 				} else if (c == SYMBOL) {
 					PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 				}
-				savetok[0] = 0;
-				while ((c = T->op->nexttoken("()<>,;", cpp_reserved_word)) != EOF) {
+				savetoken[0] = 0;
+				while ((c = T->op->nexttoken("()<>,;*", cpp_reserved_word)) != EOF) {
 					switch (c) {
 					case SHARP_IFDEF:
 					case SHARP_IFNDEF:
@@ -561,6 +562,10 @@ Cpp(const struct parser_param *param)
 					default:
 						break;
 					}
+
+					if (c != SYMBOL)
+						expect_funcptr = 0;
+
 					if (c == '(')
 						local->level++;
 					else if (c == ')')
@@ -571,22 +576,26 @@ Cpp(const struct parser_param *param)
 						templates--;
 					else if (c == SYMBOL) {
 						if (local->level > typedef_savelevel) {
-							PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
+							if (expect_funcptr)
+								PUT(PARSER_DEF, T->token, T->lineno, T->sp);
+							else
+								PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 						} else {
 							/* put latest token if any */
-							if (savetok[0]) {
-								PUT(PARSER_REF_SYM, savetok, savelineno, T->sp);
+							if (savetoken[0]) {
+								PUT(PARSER_REF_SYM, savetoken, savelineno, T->sp);
 							}
 							/* save lastest token */
-							strlimcpy(savetok, T->token, sizeof(savetok));
+							strlimcpy(savetoken, T->token, sizeof(savetoken));
 							savelineno = T->lineno;
 						}
 					} else if (c == ',' || c == ';') {
-						if (savetok[0]) {
-							PUT(templates ? PARSER_REF_SYM : PARSER_DEF, savetok, T->lineno, T->sp);
-							savetok[0] = 0;
+						if (savetoken[0]) {
+							PUT(templates ? PARSER_REF_SYM : PARSER_DEF, savetoken, T->lineno, T->sp);
+							savetoken[0] = 0;
 						}
-					}
+					} else if (c == '*')
+						expect_funcptr = 1;
 					if (local->level == typedef_savelevel && c == ';')
 						break;
 				}
@@ -757,9 +766,7 @@ condition_macro(const struct parser_param *param, int cc)
 		local->curstack->if0only = 0;
 	} else if (cc == SHARP_ENDIF) {
 		int minus = 0;
-
-		--local->piflevel;
-		if (local->piflevel < 0) {
+		if (--local->piflevel < 0) {
 			minus = 1;
 			local->piflevel = 0;
 		}
