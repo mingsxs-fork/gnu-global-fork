@@ -209,6 +209,17 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <setjmp.h>]], [[jmp_buf env; sigsetjm
    AC_DEFINE(HAVE_SIGSETJMP,1,
              [ Define if we have sigsetjmp(). ])],[AC_MSG_RESULT(no)])
 
+# Check for pthread.
+CFLAGS="$CFLAGS -pthread"  # This is indeed necessary, otherwise confdef.h will fail.
+AC_MSG_CHECKING(for posix thread)
+AC_LINK_IFELSE(
+ [AC_LANG_PROGRAM(
+  [#include <pthread.h>
+   void *g(void *d) { return NULL; }],
+  [pthread_t t; pthread_create(&t,NULL,g,NULL);])],
+ [AC_MSG_RESULT(yes) AC_DEFINE(HAVE_PTHREAD,1,[ Define if we have posix thread. ])],
+ [AC_MSG_RESULT(no)])
+
 dnl Checks for library functions.
 AC_CHECK_FUNCS(fixkeypad strerror)
 

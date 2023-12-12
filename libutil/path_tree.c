@@ -483,7 +483,7 @@ walk_find_proc_path(STRBUF *sb, PATH_PROC proc, void *data)
 				(void)walk_find_proc_path(sb, proc, data);
 			else if (S_ISREG(st.st_mode)) {
 				total_accepted_paths += 1;
-				/* handled found path */
+				/* process found path with given handler */
 				(void)proc(strbuf_value(sb), data);
 			}
 		}

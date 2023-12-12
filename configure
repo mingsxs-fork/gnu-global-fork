@@ -3568,7 +3568,7 @@ fi
 
 # Define the identity of the package.
  PACKAGE='global'
- VERSION='6.6.10-ming'
+ VERSION='6.6.10-Ming'
 
 
 printf "%s\n" "#define PACKAGE \"$PACKAGE\"" >>confdefs.h
@@ -16945,6 +16945,35 @@ then :
 printf "%s\n" "yes" >&6; }
 
 printf "%s\n" "#define HAVE_SIGSETJMP 1" >>confdefs.h
+
+else $as_nop
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+
+# Check for pthread.
+CFLAGS="$CFLAGS -pthread"  # This is indeed necessary, otherwise confdef.h will fail.
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for posix thread" >&5
+printf %s "checking for posix thread... " >&6; }
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <pthread.h>
+   void *g(void *d) { return NULL; }
+int
+main (void)
+{
+pthread_t t; pthread_create(&t,NULL,g,NULL);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }
+printf "%s\n" "#define HAVE_PTHREAD 1" >>confdefs.h
 
 else $as_nop
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
