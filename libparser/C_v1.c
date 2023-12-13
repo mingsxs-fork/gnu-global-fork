@@ -383,8 +383,11 @@ C_family(const struct parser_param *param, int type)
 				 * This parser is too complex to maintain.
 				 * We should rewrite the whole.
 				 */
+#define FUNC_PTR_NO_FOUND (-1)
+#define FUNC_PTR_WAITING (0)
+#define FUNC_PTR_FOUND (1)
 				int typedef_savelevel = local->level;
-				int expect_funcptr;
+				int sm_funcptr = FUNC_PTR_NO_FOUND;
 
 				savetoken[0] = 0;
 				savelineno = 0;
@@ -479,19 +482,16 @@ C_family(const struct parser_param *param, int type)
 					default:
 						break;
 					}
-
-					if (c != SYMBOL)
-						expect_funcptr = 0;
-
 					if (c == '(')
 						local->level++;
 					else if (c == ')')
 						local->level--;
 					else if (c == SYMBOL) {
 						if (local->level > typedef_savelevel) {
-							if (expect_funcptr)
+							if (sm_funcptr == FUNC_PTR_WAITING) {
 								PUT(PARSER_DEF, T->token, T->lineno, T->sp);
-							else
+								sm_funcptr = FUNC_PTR_FOUND;
+							} else
 								PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 						} else {
 							/* put latest token if any */
@@ -507,8 +507,8 @@ C_family(const struct parser_param *param, int type)
 							PUT(PARSER_DEF, savetoken, T->lineno, T->sp);
 							savetoken[0] = 0;
 						}
-					} else if (c == '*')
-						expect_funcptr = 1; /* expect function pointer typedef */
+					} else if (c == '*' && local->level > typedef_savelevel && sm_funcptr == FUNC_PTR_NO_FOUND)
+						sm_funcptr = FUNC_PTR_WAITING;
 
 					if (local->level == typedef_savelevel && c == ';')
 						break;  /* go out of typedef block parsing */
@@ -520,6 +520,9 @@ C_family(const struct parser_param *param, int type)
 						warning("unmatched () block. (last at level %d.)[+%d %s]", local->level, T->lineno, T->gpath->path);
 				}
 			}
+#undef FUNC_PTR_NO_FOUND
+#undef FUNC_PTR_WAITING
+#undef FUNC_PTR_FOUND
 			break;
 		case C___ATTRIBUTE__:
 			process_attribute(param);
