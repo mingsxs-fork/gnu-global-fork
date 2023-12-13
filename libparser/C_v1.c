@@ -574,14 +574,14 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 {
 	static VARRAY *vb = NULL;
 	int c, nextc;
-	int brace_level, found_args, unknown_symbols, index;
+	int brace_level, found_args, index;
 	int accept_arg1 = 0;
 	STRBUF *sb;
 
 	if (!vb)
 		vb = varray_open(sizeof(STRBUF), 16);
 
-	brace_level = found_args = unknown_symbols = index = 0;
+	brace_level = found_args = index = 0;
 	while ((c = T->op->nexttoken("()", c_reserved_word)) != EOF) {
 		switch (c) {
 		case SHARP_IFDEF:
@@ -626,7 +626,6 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 	}
 	if (c == EOF)
 		return 0;
-	brace_level = 0;
 	while ((c = T->op->nexttoken(",;[](){}=", c_reserved_word)) != EOF) {
 		switch (c) {
 		case SHARP_IFDEF:
@@ -651,13 +650,14 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 		else if (c == /* ( */')' || c == ']')
 			brace_level--;
 		else if (c == ';' || c == ',') { /* the only loop exit for not function */
-			if ((found_args == 0) && unknown_symbols <= 1)
+			if (brace_level == 0 && found_args == 0)
 				break;
-			if (found_args == index) /* all symbol found in arglist */
-				return 1;
 		} else if (c == '{' /* } */) {
-			T->op->pushbacktoken();
-			return 1;
+			if (brace_level == 0 && (found_args == 0 || found_args == index)) {
+				T->op->pushbacktoken();
+				return 1;
+			}
+			break; /* not function definition */
 		} else if (c == /* { */'}') {
 			T->op->pushbacktoken();
 			break;
@@ -668,15 +668,12 @@ function_definition(const struct parser_param *param, char arg1[MAXTOKEN])
 			PUT(PARSER_REF_SYM, T->token, T->lineno, T->sp);
 			if (brace_level == 0) {
 				/* match if known argument name */
-				int i;
-				for (i = 0; i < index; i ++) {
+				for (int i = 0; i < index; i ++) {
 					if (!strcmp(strbuf_value(varray_assign(vb, i, 0)), T->token)) {
 						found_args ++;
 						break;
 					}
 				}
-				if (i >= index) /* not found */
-					unknown_symbols ++;
 			}
 		}
 	}

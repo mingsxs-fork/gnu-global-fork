@@ -42,17 +42,13 @@
 #include "strbuf.h"
 #include "strlimcpy.h"
 
-static DBOP *dbop;
-static int _startkey;
-static int _nextkey;
-static int _mode;
-static int opened;
-static int created;
 
-static int openflags;
+static GPATH_DB *gpath = NULL;
+
 void
 set_gpath_flags(int flags) {
-	openflags = flags;
+	if (gpath)
+		gpath->openflags = flags;
 }
 /**
  * compare_nearpath: compare function for 'nearness sort'.
@@ -117,38 +113,43 @@ static int create_version = 2;	/**< format version of newly created tag file */
 int
 gpath_open(const char *dbpath, int mode)
 {
-	if (opened > 0) {
-		if (mode != _mode)
+	if (!gpath)
+		gpath = check_calloc(sizeof(GPATH_DB), 1);
+
+	if (gpath->opened > 0) {
+		if (mode != gpath->mode)
 			die("duplicate open with different mode.");
-		opened++;
-		return 0;
+		goto open_done;
 	}
 	/*
 	 * We create GPATH just first time.
 	 */
-	_mode = mode;
-	if (mode == 1 && created)
+	gpath->mode = mode;
+	if (mode == 1 && gpath->created)
 		mode = 0;
-	dbop = dbop_open(makepath(dbpath, dbname(GPATH), NULL), mode, 0644, openflags);
-	if (dbop == NULL)
+	gpath->dbop = dbop_open(makepath(dbpath, dbname(GPATH), NULL), mode, 0644, gpath->openflags);
+	if (gpath->dbop == NULL)
 		return -1;
+
 	if (mode == 1) {
-		dbop_putversion(dbop, create_version);
-		_startkey = _nextkey = 1;
+		dbop_putversion(gpath->dbop, create_version);
+		gpath->startkey = gpath->nextkey = 1;
 	} else {
 		int format_version;
-		const char *path = dbop_get(dbop, NEXTKEY);
+		const char *path = dbop_get(gpath->dbop, NEXTKEY);
 
 		if (path == NULL)
 			die("nextkey not found in GPATH.");
-		_startkey = _nextkey = atoi(path);
-		format_version = dbop_getversion(dbop);
+		gpath->startkey = gpath->nextkey = atoi(path);
+		format_version = dbop_getversion(gpath->dbop);
 		if (format_version > support_version)
 			die("GPATH seems new format. Please install the latest GLOBAL.");
 		else if (format_version < support_version)
                         die("GPATH seems older format. Please remake tag files."); 
 	}
-	opened++;
+
+open_done:
+	gpath->opened++; /* for reentry */
 	return 0;
 }
 /**
@@ -164,27 +165,27 @@ gpath_put(const char *path, int type)
 {
 	static char sfid[MAXFIDLEN];
 	STATIC_STRBUF(sb);
-	assert(opened > 0);
-	if (_mode == 1 && created)
+	assert(gpath->opened > 0);
+	if (gpath->mode == 1 && gpath->created)
 		return "";
-	if (dbop_get(dbop, path) != NULL)
+	if (dbop_get(gpath->dbop, path) != NULL)
 		return "";
 	/*
 	 * generate new file id for the path.
 	 */
-	snprintf(sfid, sizeof(sfid), "%d", _nextkey++);
+	snprintf(sfid, sizeof(sfid), "%d", gpath->nextkey++);
 	/*
 	 * path => fid mapping.
 	 */
 	strbuf_clear(sb);
 	strbuf_puts(sb, sfid);
-	dbop_put_path(dbop, path, strbuf_value(sb), type == GPATH_OTHER ? "o" : NULL);
+	dbop_put_path(gpath->dbop, path, strbuf_value(sb), type == GPATH_OTHER ? "o" : NULL);
 	/*
 	 * fid => path mapping.
 	 */
 	strbuf_clear(sb);
 	strbuf_puts(sb, path);
-	dbop_put_path(dbop, sfid, strbuf_value(sb), type == GPATH_OTHER ? "o" : NULL);
+	dbop_put_path(gpath->dbop, sfid, strbuf_value(sb), type == GPATH_OTHER ? "o" : NULL);
 	return (const char *)sfid;
 }
 /**
@@ -199,10 +200,10 @@ gpath_put(const char *path, int type)
 const char *
 gpath_path2fid(const char *path, int *type)
 {
-	assert(opened > 0);
-	const char *fid = dbop_get(dbop, path);
+	assert(gpath->opened > 0);
+	const char *fid = dbop_get(gpath->dbop, path);
 	if (fid && type) {
-		const char *flag = dbop_getflag(dbop);
+		const char *flag = dbop_getflag(gpath->dbop);
 		*type = (*flag == 'o') ? GPATH_OTHER : GPATH_SOURCE;
 			
 	}
@@ -220,10 +221,10 @@ gpath_path2fid(const char *path, int *type)
 const char *
 gpath_fid2path(const char *fid, int *type)
 {
-	assert(opened > 0);
-	const char *path = dbop_get(dbop, fid);
+	assert(gpath->opened > 0);
+	const char *path = dbop_get(gpath->dbop, fid);
 	if (path && type) {
-		const char *flag = dbop_getflag(dbop);
+		const char *flag = dbop_getflag(gpath->dbop);
 		*type = (*flag == 'o') ? GPATH_OTHER : GPATH_SOURCE;
 	}
 	return path;
@@ -269,14 +270,14 @@ gpath_delete(const char *path)
 {
 	const char *fid;
 
-	assert(opened > 0);
-	assert(_mode == 2);
+	assert(gpath->opened > 0);
+	assert(gpath->mode == 2);
 	assert(path[0] == '.' && path[1] == '/');
-	fid = dbop_get(dbop, path);
+	fid = dbop_get(gpath->dbop, path);
 	if (fid == NULL)
 		return;
-	dbop_delete(dbop, fid);
-	dbop_delete(dbop, path);
+	dbop_delete(gpath->dbop, fid);
+	dbop_delete(gpath->dbop, path);
 }
 /**
  * gpath_nextkey: return next key
@@ -286,8 +287,8 @@ gpath_delete(const char *path)
 int
 gpath_nextkey(void)
 {
-	assert(_mode != 1);
-	return _nextkey;
+	assert(gpath->mode != 1);
+	return gpath->nextkey;
 }
 /**
  * gpath_count: count the number of records
@@ -305,8 +306,8 @@ gpath_count(int type)
 	int count, source_count, other_count;
 
 	count = source_count = other_count = 0;
-	for (path = dbop_first(dbop, "./", NULL, DBOP_PREFIX); path != NULL; path = dbop_next(dbop)) {
-		const char *flag = dbop_getflag(dbop);
+	for (path = dbop_first(gpath->dbop, "./", NULL, DBOP_PREFIX); path != NULL; path = dbop_next(gpath->dbop)) {
+		const char *flag = dbop_getflag(gpath->dbop);
 		if (flag && *flag == 'o')
 			other_count++;
 		else
@@ -334,23 +335,34 @@ void
 gpath_close(void)
 {
 	char fid[MAXFIDLEN];
+	if (!gpath)
+		return ;
 
-	assert(opened > 0);
-	if (--opened > 0)
+	assert(gpath->opened > 0);
+	if (--gpath->opened > 0)
 		return;
-	if (_mode == 1 && created) {
-		dbop_close(dbop);
+
+	if (gpath->mode == 1 && gpath->created) {
+		dbop_close(gpath->dbop);
+		free(gpath);
+		gpath = NULL;
 		return;
 	}
-	if (_mode == 1 ||
-           (_mode == 2 && _startkey < _nextkey))
-	{
-		snprintf(fid, sizeof(fid), "%d", _nextkey);
-		dbop_update(dbop, NEXTKEY, fid);
+
+	if (gpath->mode == 1 ||
+           (gpath->mode == 2 && gpath->startkey < gpath->nextkey)) {
+		snprintf(fid, sizeof(fid), "%d", gpath->nextkey);
+		dbop_update(gpath->dbop, NEXTKEY, fid);
 	}
-	dbop_close(dbop);
-	if (_mode == 1)
-		created = 1;
+
+	dbop_close(gpath->dbop);
+
+	if (gpath->mode == 1)
+		gpath->created = 1;
+	else {
+		free(gpath);
+		gpath = NULL;
+	}
 }
 
 /**

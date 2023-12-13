@@ -59,6 +59,16 @@ typedef struct {
 	const char *path;	/**< return value of gfind_read() */
 } GFIND;
 
+typedef struct gpath_db {
+	DBOP *dbop;
+	int startkey;
+	int nextkey;
+	int mode;
+	int opened;
+	int created;
+	int openflags;
+} GPATH_DB;
+
 void set_gpath_flags(int);
 int gpath_open(const char *, int);
 const char *gpath_path2fid(const char *, int *);
