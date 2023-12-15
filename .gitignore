@@ -67,6 +67,7 @@ htags/global.cgi
 htags/htags
 **/.libs
 **/*.dis
+.test/*
 
 # can be generated from GNU autotools
 **/.deps
