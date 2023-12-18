@@ -64,6 +64,28 @@ const char *dbop3_next(DBOP *);
 void dbop3_close(DBOP *);
 #endif
 
+#ifdef USE_THREADING
+#define _DBOP_RWLOCK_RDLOCK(dbop)	\
+	if (dbop->mode == 1)\
+		(void)pthread_rwlock_rdlock(dbop->rwlock)
+#define _DBOP_RWLOCK_RWLOCK(dbop)	\
+	if (dbop->mode == 1)\
+		(void)pthread_rwlock_wrlock(dbop->rwlock)
+#define _DBOP_RWLOCK_UNLOCK(dbop)	\
+	if (dbop->mode == 1)\
+		(void)pthread_rwlock_unlock(dbop->rwlock)
+#define _SAFE_RETURN(...) {\
+	if (GET_VA_ARG_1(__VA_ARGS__)->mode == 1)\
+		_DBOP_RWLOCK_UNLOCK(GET_VA_ARG_1(__VA_ARGS__));\
+	return (GET_ARGS_AFTER_1(__VA_ARGS__));\
+}
+#else
+#define _DBOP_RWLOCK_RDLOCK(dbop)
+#define _DBOP_RWLOCK_RWLOCK(dbop)
+#define _DBOP_RWLOCK_UNLOCK(dbop)
+#define _SAFE_RETURN(...)	return (__VA_ARGS__)
+#endif
+
 /**
  * Though the prefix of the key of meta record is currently only a ' ' (blank),
  * this will be enhanced in the future.
@@ -304,13 +326,21 @@ dbop_open(const char *path, int mode, int perm, int flags)
 	dbop->lastsize	= 0;
 	dbop->sortout	= NULL;
 	dbop->sortin	= NULL;
+	dbop->mode		= mode;
 	/*
 	 * Setup sorted writing.
 	 */
-	if (mode != 0 && dbop->openflags & DBOP_SORTED_WRITE)
+	if (dbop->mode != 0 && dbop->openflags & DBOP_SORTED_WRITE)
 		start_sort_process(dbop);
 #ifdef USE_SQLITE3
 finish:
+#endif
+#ifdef USE_THREADING
+	int r;
+	if (dbop->mode == 1) { /* GTAGS_CREATE */
+		if ((r = pthread_rwlock_init(&dbop->rwlock, NULL)) != 0)
+			die("dbop init rwlock failed, retcode: %d.", r);
+	}
 #endif
 	return dbop;
 }
@@ -330,15 +360,18 @@ dbop_get_generic(DBOP *dbop, void *name, size_t size)
 	int status;
 
 #ifdef USE_SQLITE3
-	if (dbop->openflags & DBOP_SQLITE3)
+	if (dbop->openflags & DBOP_SQLITE3) {
 		return (void *)dbop3_get(dbop, name);
+	}
 #endif
 	key.data = (void *)name;
 	key.size = size;
 
+	_DBOP_RWLOCK_RDLOCK(dbop);
 	status = (*db->get)(db, &key, &dat, 0);
 	dbop->lastdat = (char *)dat.data;
 	dbop->lastsize = dat.size;
+	_DBOP_RWLOCK_UNLOCK(dbop);
 	switch (status) {
 	case RET_SUCCESS:
 		break;
@@ -377,13 +410,14 @@ dbop_put_generic(DBOP *dbop, void *name, size_t nsize, void *data, size_t dsize,
 		die("primary key size == 0.");
 	if (klen > MAXKEYLEN)
 		die("primary key too long.");
+	_DBOP_RWLOCK_RWLOCK(dbop);
 	/* sorted writing */
 	if (dbop->sortout != NULL) {
 		fputs(name, dbop->sortout);
 		putc(SORT_SEP, dbop->sortout);
 		fputs(data, dbop->sortout);
 		putc('\n', dbop->sortout);
-		return;
+		_SAFE_RETURN(dbop);
 	}
 	key.data = (char *)name;
 	key.size = nsize;
@@ -405,6 +439,7 @@ dbop_put_generic(DBOP *dbop, void *name, size_t nsize, void *data, size_t dsize,
 			break;
 		die("%s", dbop->put_errmsg ? dbop->put_errmsg : "dbop_put failed.");
 	}
+	_DBOP_RWLOCK_UNLOCK(dbop);
 }
 /**
  * dbop_put_tag: put a tag
@@ -475,6 +510,7 @@ dbop_put_path(DBOP *dbop, const char *name, const char *data, const char *flag)
 		die("primary key size == 0.");
 	if (len > MAXKEYLEN)
 		die("primary key too long.");
+	_DBOP_RWLOCK_RWLOCK(dbop);
 	strbuf_clear(sb);
 	strbuf_puts0(sb, data);
 	if (flag)
@@ -485,6 +521,7 @@ dbop_put_path(DBOP *dbop, const char *name, const char *data, const char *flag)
 	dat.size = strbuf_getlen(sb);
 
 	status = (*db->put)(db, &key, &dat, 0);
+	_DBOP_RWLOCK_UNLOCK(dbop);
 	switch (status) {
 	case RET_SUCCESS:
 		break;
@@ -512,12 +549,14 @@ dbop_delete(DBOP *dbop, const char *path)
 		return;
 	}
 #endif
+	_DBOP_RWLOCK_RWLOCK(dbop);
 	if (path) {
 		key.data = (char *)path;
 		key.size = strlen(path)+1;
 		status = (*db->del)(db, &key, 0);
 	} else
 		status = (*db->del)(db, &key, R_CURSOR);
+	_DBOP_RWLOCK_RWLOCK(dbop);
 	if (status == RET_ERROR)
 		die("dbop_delete failed.");
 }
@@ -813,6 +852,7 @@ dbop_close(DBOP *dbop)
 	/*
 	 * Load sorted tag records and write them to the tag file.
 	 */
+	_DBOP_RWLOCK_RWLOCK(dbop);
 	if (dbop->sortout != NULL) {
 		char *p;
 
@@ -858,6 +898,9 @@ dbop_close(DBOP *dbop)
 		if (dbop->perm && chmod(dbop->dbname, dbop->perm) < 0)
 			die("chmod(2) failed.");
 	}
+	_DBOP_RWLOCK_UNLOCK(dbop);
+	if (dbop->mode == 1)
+		(void)pthread_rwlock_destroy(&dbop->rwlock);
 	(void)free(dbop);
 }
 
@@ -874,7 +917,9 @@ int dbop_exists_key(DBOP *dbop, const char *name)
 	key.data = (char *)name;
 	key.size = strlen(name)+1;
 
+	_DBOP_RWLOCK_RDLOCK(dbop);
 	status = (*db->get)(db, &key, NULL, 0);
+	_DBOP_RWLOCK_UNLOCK(dbop);
 	switch (status) {
 	case RET_SUCCESS:
 		return 1;

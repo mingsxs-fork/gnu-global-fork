@@ -43,7 +43,6 @@
 static void trim_suffix_list(STRBUF *, STRHASH *);
 static int match_suffix_list(const char *, const char *, const char *);
 
-STATIC_STRBUF(lastmatch);
 STATIC_STRBUF(active_map);
 static int wflag;
 
@@ -240,11 +239,8 @@ decide_lang(const char *suffix)
 	 * as C source files by default. If you set an environment variable
 	 * 'GTAGS_FORCECPP' then C++ parser will be invoked.
 	 */
-	if (!strcmp(suffix, ".h") && getenv("GTAGSFORCECPP") != NULL) {
-		strbuf_clear(lastmatch);
-		strbuf_puts(lastmatch, ".h");
+	if (!strcmp(suffix, ".h") && getenv("GTAGSFORCECPP") != NULL)
 		return "cpp";
-	}
 	lang = strbuf_value(active_map);
 	tail = lang + strbuf_getlen(active_map);
 
@@ -274,11 +270,8 @@ decide_lang_path(const char *path)
 	 * as C source files by default. If you set an environment variable
 	 * 'GTAGS_FORCECPP' then C++ parser will be invoked.
 	 */
-	if (!strcmp(suffix, ".h") && getenv("GTAGSFORCECPP") != NULL) {
-		strbuf_clear(lastmatch);
-		strbuf_puts(lastmatch, ".h");
+	if (!strcmp(suffix, ".h") && getenv("GTAGSFORCECPP") != NULL)
 		return "cpp";
-	}
 	lang = strbuf_value(active_map);
 	tail = lang + strbuf_getlen(active_map);
 
@@ -296,16 +289,11 @@ decide_lang_path(const char *path)
  * return true if the suffix exists in the list.
  * suffix may include '(<glob pattern>)'.
  */
-const char *
-get_last_match() {
-	return strbuf_value(lastmatch);
-}
 static int
 match_suffix_list(const char *suffix, const char *basename, const char *list)
 {
 	const char *p;
 
-	strbuf_clear(lastmatch);
 	suffix++;	/* skip '.' */
 	/*
 	 * list includes suffixes and/or patterns.
@@ -317,20 +305,13 @@ match_suffix_list(const char *suffix, const char *basename, const char *list)
 #if defined(_WIN32) || defined(__DJGPP__)
 								|IGNORE_CASE
 #endif
-			)) {
-				strbuf_putc(lastmatch, '.');
-				strbuf_puts(lastmatch, p);
+			))
 				return 1;
-			}
 			list += strlen(p);
 		} else if (*list == '(') {
 			p = strmake(++list, ")");
-			if (basename && fnmatch(p, basename, 0) == 0) {
-				strbuf_putc(lastmatch, '(');
-				strbuf_puts(lastmatch, p);
-				strbuf_putc(lastmatch, ')');
+			if (basename && fnmatch(p, basename, 0) == 0)
 				return 1;
-			}
 			list += strlen(p) + 1;
 		}
 	}

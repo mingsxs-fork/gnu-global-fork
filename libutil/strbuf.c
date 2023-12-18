@@ -46,6 +46,9 @@
 #define first_zero_bit(x)	(int)(__builtin_ffs(~(unsigned int)x) - 1)
 
 static STRBUF_POOL *sb_pool = NULL;
+#ifdef USE_THREADING
+pthread_rwlock_t sb_pool_rwlock = PTHREAD_RWLOCK_INITIALIZER;
+#endif
 
 /*
 
@@ -128,7 +131,12 @@ __strbuf_init(STRBUF *sb, int init)
 STRBUF *
 strbuf_open(int init)
 {
-	STRBUF *sb = (STRBUF *)check_calloc(sizeof(STRBUF), 1);
+#ifdef USE_THREADING
+	static thread_local STRBUF *sb;
+#else
+	STRBUF *sb;
+#endif
+	sb = check_calloc(sizeof(STRBUF), 1);
 
 	sb->sbufsize = (init > 0) ? init : INITIALSIZE;
 	sb->sbuf = (char *)check_malloc(sb->sbufsize + 1);
@@ -593,12 +601,20 @@ strbuf_endswith(STRBUF *sb, const char *s)
 void
 strbuf_pool_init (int limit)
 {
+#ifdef USE_THREADING
+	(void)pthread_rwlock_wrlock(&sb_pool_rwlock);
+#endif
 	if (!sb_pool) {
 		sb_pool = check_malloc(sizeof(STRBUF_POOL));
 		sb_pool->limit = limit;
 		sb_pool->vb = varray_open(sizeof(STRBUF), STRBUF_POOL_EXPAND);
 		sb_pool->map = NULL;
 		sb_pool->mapsize = sb_pool->assigned = sb_pool->released = 0;
+#ifdef USE_THREADING
+		int r;
+		if ((r = pthread_mutex_init(&sb_pool->mutex, NULL)) != 0)
+			die("strbuf pool init mutex failed, retcode: %d\n", r);
+#endif
 	} else { /* reinit */
 		if ((sb_pool->assigned - sb_pool->released) > limit) {
 			warning ("beyond strbuf pool limit, original: %d, new: %d, ignored", sb_pool->limit, limit);
@@ -606,6 +622,9 @@ strbuf_pool_init (int limit)
 		}
 		sb_pool->limit = limit; /* only update pool limit */
 	}
+#ifdef USE_THREADING
+	(void)pthread_rwlock_unlock(&sb_pool_rwlock);
+#endif
 }
 
 void
@@ -613,9 +632,15 @@ strbuf_pool_close (void)
 {
 	int i;
 	STRBUF *sb;
+#ifdef USE_THREADING
+	(void)pthread_rwlock_wrlock(&sb_pool_rwlock);
+#endif
 	if (!sb_pool)
-		return ;
+		goto defer;
 	/* free all strbuf internal buffers assigned */
+#ifdef USE_THREADING
+	(void)pthread_mutex_lock(&sb_pool->mutex);
+#endif
 	for (i = 0; i < sb_pool->vb->length; i++) {
 		sb = varray_assign(sb_pool->vb, i, 0);
 		if (sb->name) {
@@ -630,8 +655,17 @@ strbuf_pool_close (void)
 	varray_close(sb_pool->vb);
 	if (sb_pool->map)
 		free(sb_pool->map);
+#ifdef USE_THREADING
+	(void)pthread_mutex_unlock(&sb_pool->mutex);
+	(void)pthread_mutex_destroy(&sb_pool->mutex);
+#endif
 	free(sb_pool);
 	sb_pool = NULL;
+defer:
+#ifdef USE_THREADING
+	(void)pthread_rwlock_unlock(&sb_pool_rwlock);
+#endif
+	return;
 }
 
 STRBUF *
@@ -640,11 +674,17 @@ strbuf_pool_assign (int initsize)
 	static int imapsave = 0;
 	STRBUF *unused = NULL;
 	register int imap, upper, k, index;
+#ifdef USE_THREADING
+	(void)pthread_rwlock_rdlock(&sb_pool_rwlock);
+#endif
 	if (!sb_pool)
 		die("strbuf pool not initialized.");
+#ifdef USE_THREADING
+	(void)pthread_mutex_lock(&sb_pool->mutex);
+#endif
 	if (sb_pool->assigned - sb_pool->released >= sb_pool->limit) {
 		warning("strbuf pool beyond limit: %d.", sb_pool->limit);
-		return NULL;
+		goto defer;
 	}
 	/* first lookup in the allocated block */
 	for (imap = imapsave, upper = sb_pool->mapsize; imap < upper; imap++) {
@@ -681,6 +721,11 @@ strbuf_pool_assign (int initsize)
 	__strbuf_init(unused, initsize);
 	sb_pool->map[index / STRBUF_POOL_EXPAND] |= (1 << (index % STRBUF_POOL_EXPAND));
 	sb_pool->assigned ++;
+defer:
+#ifdef USE_THREADING
+	(void)pthread_mutex_unlock(&sb_pool->mutex);
+	(void)pthread_rwlock_unlock(&sb_pool_rwlock);
+#endif
 	return unused;
 }
 
@@ -689,8 +734,14 @@ strbuf_pool_release (STRBUF *sb)
 {
 	static int isave = 0;
 	int i, upper;
+#ifdef USE_THREADING
+	(void)pthread_rwlock_rdlock(&sb_pool_rwlock);
+#endif
 	if (!sb_pool)
 		die("strbuf pool not initialized.");
+#ifdef USE_THREADING
+	(void)pthread_mutex_lock(&sb_pool->mutex);
+#endif
 	for (i = isave, upper = sb_pool->vb->length; i < upper; i++) {
 		if (sb_pool->map[i / STRBUF_POOL_EXPAND] & (1 << (i % STRBUF_POOL_EXPAND)) == 0)
 			continue;
@@ -707,4 +758,8 @@ strbuf_pool_release (STRBUF *sb)
 		}
 	}
 	isave = (i == sb_pool->vb->length ? 0 : i); /* update isave */
+#ifdef USE_THREADING
+	(void)pthread_mutex_unlock(&sb_pool->mutex);
+	(void)pthread_rwlock_unlock(&sb_pool_rwlock);
+#endif
 }

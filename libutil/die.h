@@ -49,12 +49,14 @@ void die(const char *s, ...)
 	__attribute__ ((__noreturn__, __format__ (__printf__, 1, 2)));
 void die_with_code(int n, const char *s, ...)
 	__attribute__ ((__noreturn__, __format__ (__printf__, 2, 3)));
-void message(const char *s, ...)
+
+void message(const char *, ...)
 	__attribute__ ((__format__ (__printf__, 1, 2)));
-void messagec(int ch);
 void warning(const char *s, ...)
 	__attribute__ ((__format__ (__printf__, 1, 2)));
 void error(const char *s, ...)
+	__attribute__ ((__format__ (__printf__, 1, 2)));
+void debug(const char *s, ...)
 	__attribute__ ((__format__ (__printf__, 1, 2)));
 
 #endif /* ! _DIE_H_ */

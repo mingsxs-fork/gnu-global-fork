@@ -469,7 +469,6 @@ get_explain(const char *path, const struct lang_entry *ent)
 	strbuf_clear(sb);
 
 	strbuf_sprintf(sb, " - File '%s' is handled as follows:\n", trimpath(path));
-	strbuf_sprintf(sb, "\tsuffix:   |%s|\n", get_last_match());
 	strbuf_sprintf(sb, "\tlanguage: |%s|\n", ent->lang_name);
 	strbuf_sprintf(sb, "\tparser:   |%s|\n", ent->parser_name);
 	strbuf_sprintf(sb, "\tlibrary:  |%s|\n", ent->lt_dl_name ? ent->lt_dl_name : "builtin library");

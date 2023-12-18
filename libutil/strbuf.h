@@ -32,6 +32,7 @@
 #endif
 #include <stdarg.h>
 #include "varray.h"
+#include "threading.h"
 
 #ifndef __attribute__
 /* This feature is available in gcc versions 2.5 and later.  */
@@ -75,6 +76,9 @@ typedef struct _strbuf_pool {
 	/* counters */
 	int assigned;
 	int released;
+#ifdef USE_THREADING
+	pthread_mutex_t mutex;
+#endif
 } STRBUF_POOL;
 
 /**
@@ -98,7 +102,13 @@ typedef struct _strbuf_pool {
  *              return strbuf_value(sb);
  *      }
  */
+
+#ifdef USE_THREADING
+/* always static for thread_local */
+#define STATIC_STRBUF(sb) static thread_local STRBUF sb[1]
+#else
 #define STATIC_STRBUF(sb) static STRBUF sb[1]
+#endif
 
 #define strbuf_empty(sb) (sb->sbufsize == 0)
 

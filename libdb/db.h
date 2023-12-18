@@ -242,4 +242,32 @@ DB	*__bt_open(const char *, int, int, const BTREEINFO *, int);
 DB	*__hash_open(const char *, int, int, const HASHINFO *, int);
 DB	*__rec_open(const char *, int, int, const RECNOINFO *, int);
 void	 __dbpanic(DB *dbp);
+
+/* check if we support concurrent threading */
+#ifdef HAVE_PTHREAD_H
+#include <pthread.h>
+#include "threading.h"
+#ifdef USE_THREADING
+#define DB_CONCURRENT 1  /* visible in libdb */
+#endif
+#endif
+/**
+ * @brief Get the first argument
+ *
+ * @param ... Arguments to select
+ *
+ * @return First argument or empty if no arguments are provided
+ */
+#define GET_VA_ARG_1(...) __GET_VA_ARG_1(__VA_ARGS__, ) // Make sure that also for 1 argument it works
+#define __GET_VA_ARG_1(a1, ...) a1
+/**
+ * @brief Get all the arguments but the first one
+ *
+ * @param ... Arguments to select
+ *
+ * @return All arguments after the first one or empty if less than 2 arguments are provided
+ */
+#define GET_ARGS_AFTER_1(...) __GET_ARGS_AFTER_1(__VA_ARGS__, ) // Make sure that also for 1 argument it works
+#define __GET_ARGS_AFTER_1(a1, ...) __VA_ARGS__
+
 #endif /* !_DB_H_ */

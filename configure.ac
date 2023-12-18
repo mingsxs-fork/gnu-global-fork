@@ -217,7 +217,7 @@ AC_LINK_IFELSE(
   [#include <pthread.h>
    void *g(void *d) { return NULL; }],
   [pthread_t t; pthread_create(&t,NULL,g,NULL);])],
- [AC_MSG_RESULT(yes) AC_DEFINE(HAVE_PTHREAD,1,[ Define if we have posix thread. ])],
+ [AC_MSG_RESULT(yes) AC_DEFINE(HAVE_PTHREAD_H,1,[ Define if we have posix thread. ])],
  [AC_MSG_RESULT(no)])
 
 dnl Checks for library functions.

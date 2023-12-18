@@ -30,6 +30,11 @@
 #ifdef USE_SQLITE3
 #include <sqlite3.h>
 #endif
+#ifdef HAVE_PTHREAD_H
+#include <pthread.h>
+#include "threading.h"
+#endif
+
 #include "regex.h"
 #include "strbuf.h"
 
@@ -96,6 +101,9 @@ typedef	struct {
 #ifdef USE_SQLITE3
 	/** for commit */
 	int writecount;
+#endif
+#ifdef USE_THREADING
+	pthread_rwlock_t rwlock;
 #endif
 } DBOP;
 

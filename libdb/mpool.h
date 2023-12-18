@@ -30,6 +30,7 @@
  */
 
 #include "queue.h"
+#include "db.h"
 
 /**
  * The memory pool scheme is a simple one.  Each in-memory page is referenced
@@ -91,6 +92,9 @@ typedef struct MPOOL {
 	u_long	pageput;
 	u_long	pageread;
 	u_long	pagewrite;
+#endif
+#ifdef DB_CONCURRENT
+	pthread_rwlock_t rwlock;
 #endif
 } MPOOL;
 

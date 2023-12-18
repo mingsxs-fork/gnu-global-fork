@@ -430,6 +430,7 @@ issourcefile(const char *path)
 int
 skipthisfile(const char *path)
 {
+	STATIC_STRBUF(sb);
 	regmatch_t m;
 	int i;
 
@@ -444,17 +445,19 @@ skipthisfile(const char *path)
 	if (regexec(skip, path, 1, &m, 0) == 0) {
 		if (debug) {
 			int len = strlen(path);
-			message("DBG: ");
+			strbuf_reset(sb);
+			strbuf_puts(sb, "DBG :");
 			for (i = 0; i < len; i++) {
 				if (m.rm_so == i)
-					messagec('[');
+					strbuf_putc(sb, '[');
 				if (m.rm_eo == i)
-					messagec(']');
-				messagec(path[i]);
+					strbuf_putc(sb, ']');
+				strbuf_putc(sb, path[i]);
 			}
 			if (m.rm_eo == len)
-				messagec(']');
-			message(" => SKIPPED\n");
+				strbuf_putc(sb, ']');
+			strbuf_puts(sb, " => SKIPPED\n");
+			message(strbuf_value(sb));
 		}
 		if (find_explain) {
 			int type = getreason(path);

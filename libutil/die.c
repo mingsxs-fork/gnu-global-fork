@@ -25,55 +25,62 @@
 #ifdef STDC_HEADERS
 #include <stdlib.h>
 #endif
+#ifdef HAVE_PTHREAD_H
+#include <pthread.h>
+#endif
 
 #include "die.h"
+#include "logging.h"
+#include "threading.h"
 
 static int quiet;
 static int verbose;
 static int debug;
+static FILE *handler = NULL;
 static void (*exit_proc)(void);
-static FILE *gout = NULL;
 
 void
 setquiet(void)
 {
 	quiet = 1;
 }
+
 void
 setverbose(void)
 {
 	verbose = 1;
-	FILE *lp;
-	const char *logfile = getenv("GTAGSLOGGING");
-	if (logfile && (lp = fopen(logfile, "a")) != NULL)
-		gout = lp;
 }
+
 void
 setdebug(void)
 {
 	debug = 1;
-	FILE *lp;
-	const char *logfile = getenv("GTAGSLOGGING");
-	if (logfile && (lp = fopen(logfile, "a")) != NULL)
-		gout = lp;
 }
+
 void
 sethandler(void (*proc)(void))
 {
 	exit_proc = proc;
 }
+
 void
 die(const char *s, ...)
 {
 	va_list ap;
 
+	if (!handler)
+		handler = open_logging_handler();
 	if (!quiet) {
-		fprintf(stderr, "%s: ", progname);
 		va_start(ap, s);
-		(void)vfprintf(stderr, s, ap);
+		(void)vfprintf(handler, s, ap);
 		va_end(ap);
-		fputs("\n", stderr);
+		fputs("\n", handler);
 	}
+#ifdef USE_THREADING
+	if (is_job_thread()) {
+	}
+#endif
+
 	if (exit_proc)
 		(*exit_proc)();
 	if (debug)
@@ -86,13 +93,20 @@ die_with_code(int n, const char *s, ...)
 {
 	va_list ap;
 
+	if (!handler)
+		handler = open_logging_handler();
+
 	if (!quiet) {
-		fprintf(stderr, "%s: ", progname);
+		fprintf(handler, "%s: ", progname);
 		va_start(ap, s);
-		(void)vfprintf(stderr, s, ap);
+		(void)vfprintf(handler, s, ap);
 		va_end(ap);
-		fputs("\n", stderr);
+		fputs("\n", handler);
 	}
+#ifdef USE_THREADING
+	if (is_job_thread()) {
+	}
+#endif
 	if (exit_proc)
 		(*exit_proc)();
 	if (debug)
@@ -104,30 +118,31 @@ message(const char *s, ...)
 {
 	va_list ap;
 
-	if (!quiet && (verbose || debug)) {
+	if (!handler)
+		handler = open_logging_handler();
+
+	if (!quiet && verbose) {
 		va_start(ap, s);
-		(void)vfprintf(gout ? gout : stderr, s, ap);
+		(void)vfprintf(handler, s, ap);
 		va_end(ap);
-		fputs("\n", gout ? gout : stderr);
+		fputs("\n", handler);
 	}
 }
-void
-messagec(int ch)
-{
-	if (!quiet && (verbose || debug))
-		fputc(ch, gout ? gout : stderr);
-}
+
 void
 warning(const char *s, ...)
 {
 	va_list ap;
 
+	if (!handler)
+		handler = open_logging_handler();
+
 	if (!quiet) {
-		fputs("Warning: ", gout ? gout : stderr);
+		fputs("Warning: ", handler);
 		va_start(ap, s);
-		(void)vfprintf(gout ? gout : stderr, s, ap);
+		(void)vfprintf(handler, s, ap);
 		va_end(ap);
-		fputs("\n", gout ? gout : stderr);
+		fputs("\n", handler);
 	}
 }
 
@@ -136,11 +151,31 @@ error(const char *s, ...)
 {
 	va_list ap;
 
+	if (!handler)
+		handler = open_logging_handler();
+
 	if (!quiet) {
-		fputs("Error: ", gout ? gout : stderr);
+		fputs("Error: ", handler);
 		va_start(ap, s);
-		(void)vfprintf(gout ? gout : stderr, s, ap);
+		(void)vfprintf(handler, s, ap);
 		va_end(ap);
-		fputs("\n", gout ? gout : stderr);
+		fputs("\n", handler);
+	}
+}
+
+void
+debug(const char *s, ...)
+{
+	va_list ap;
+
+	if (!handler)
+		handler = open_logging_handler();
+
+	if (!quiet && debug) {
+		fputs("Debug: ", handler);
+		va_start(ap, s);
+		(void)vfprintf(handler, s, ap);
+		va_end(ap);
+		fputs("\n", handler);
 	}
 }

@@ -54,12 +54,24 @@ static char sccsid[] = "@(#)mpool.c	8.5 (Berkeley) 7/26/94";
 #define fsync _commit
 #endif
 
-#include "queue.h"
-#include "db.h"
-#include "die.h"
+#ifdef DB_CONCURRENT
+#define _MPOOL_RWLOCK_RDLOCK(mp)	(void)pthread_rwlock_rdlock(mp->rwlock)
+#define _MPOOL_RWLOCK_WRLOCK(mp)	(void)pthread_rwlock_wrlock(mp->rwlock)
+#define _MPOOL_RWLOCK_UNLOCK(mp)	(void)pthread_rwlock_unlock(mp->rwlock)
+#define _SAFE_RETURN(...)	{\
+	_MPOOL_RWLOCK_UNLOCK(GET_VA_ARG_1(__VA_ARGS__)); \
+	return (GET_ARGS_AFTER_1(__VA_ARGS__));\
+}
+#else
+#define _MPOOL_RWLOCK_RDLOCK(mp)
+#define _MPOOL_RWLOCK_WRLOCK(mp)
+#define _MPOOL_RWLOCK_UNLOCK(mp)
+#define _SAFE_RETURN(...)	return (__VA_ARGS__)
+#endif
 
 #define	__MPOOLINTERFACE_PRIVATE
 #include "mpool.h"
+#include "die.h"
 
 static BKT *mpool_bkt(MPOOL *);
 static BKT *mpool_look(MPOOL *, pgno_t);
@@ -107,6 +119,12 @@ mpool_open(key, fd, pagesize, maxcache)
 	mp->npages = sb.st_size / pagesize;
 	mp->pagesize = pagesize;
 	mp->fd = fd;
+#ifdef DB_CONCURRENT
+	/* init concurrent sync locks */
+	int r;
+	if ((r = pthread_rwlock_init(&mp->rwlock)) != 0)
+		die("mpool init rwlock failed, retcode: %d.", r);
+#endif
 	return (mp);
 }
 
@@ -126,9 +144,11 @@ mpool_filter(mp, pgin, pgout, pgcookie)
 	void (*pgout)(void *, pgno_t, void *);
 	void *pgcookie;
 {
+	_MPOOL_RWLOCK_WRLOCK(mp);
 	mp->pgin = pgin;
 	mp->pgout = pgout;
 	mp->pgcookie = pgcookie;
+	_MPOOL_RWLOCK_UNLOCK(mp);
 }
 	
 /**
@@ -146,6 +166,7 @@ mpool_new(mp, pgnoaddr)
 	struct _hqh *head;
 	BKT *bp;
 
+	_MPOOL_RWLOCK_WRLOCK(mp);
 	if (mp->npages == MAX_PAGE_NUMBER) {
 		(void)error("mpool_new: page allocation overflow.\n");
 		abort();
@@ -159,14 +180,14 @@ mpool_new(mp, pgnoaddr)
 	 * and return.
 	 */
 	if ((bp = mpool_bkt(mp)) == NULL)
-		return (NULL);
+		_SAFE_RETURN(mp, NULL);
 	*pgnoaddr = bp->pgno = mp->npages++;
 	bp->flags = MPOOL_PINNED;
 
 	head = &mp->hqh[HASHKEY(bp->pgno)];
 	CIRCLEQ_INSERT_HEAD(head, bp, hq);
 	CIRCLEQ_INSERT_TAIL(&mp->lqh, bp, q);
-	return (bp->page);
+	_SAFE_RETURN(mp, (bp->page));
 }
 
 /**
@@ -189,13 +210,18 @@ mpool_get(mp, pgno, flags)
 	int nr;
 
 	/* Check for attempt to retrieve a non-existent page. */
+	_MPOOL_RWLOCK_RDLOCK(mp);
 	if (pgno >= mp->npages) {
 		errno = EINVAL;
-		return (NULL);
+		_SAFE_RETURN(mp, NULL);
 	}
 
 #ifdef STATISTICS
+	_MPOOL_RWLOCK_UNLOCK(mp);
+	_MPOOL_RWLOCK_WRLOCK(mp);
 	++mp->pageget;
+	_MPOOL_RWLOCK_UNLOCK(mp);
+	_MPOOL_RWLOCK_RDLOCK(mp);
 #endif
 
 	/* Check for a page that is cached. */
@@ -210,6 +236,8 @@ mpool_get(mp, pgno, flags)
 		 * Move the page to the head of the hash chain and the tail
 		 * of the lru chain.
 		 */
+		_MPOOL_RWLOCK_UNLOCK(mp);
+		_MPOOL_RWLOCK_WRLOCK(mp);
 		head = &mp->hqh[HASHKEY(bp->pgno)];
 		CIRCLEQ_REMOVE(head, bp, hq);
 		CIRCLEQ_INSERT_HEAD(head, bp, hq);
@@ -218,12 +246,14 @@ mpool_get(mp, pgno, flags)
 
 		/* Return a pinned page. */
 		bp->flags |= MPOOL_PINNED;
-		return (bp->page);
+		_SAFE_RETURN(mp, (bp->page));
 	}
 
 	/* Get a page from the cache. */
+	_MPOOL_RWLOCK_UNLOCK(mp);
+	_MPOOL_RWLOCK_WRLOCK(mp);
 	if ((bp = mpool_bkt(mp)) == NULL)
-		return (NULL);
+		_SAFE_RETURN(mp, NULL);
 
 	/* Read in the contents. */
 #ifdef STATISTICS
@@ -252,15 +282,15 @@ mpool_get(mp, pgno, flags)
 	if ((nr = pread(mp->fd, bp->page, mp->pagesize, off)) != mp->pagesize) {
 		if (nr >= 0)
 			errno = EFTYPE;
-		return (NULL);
+		_SAFE_RETURN(mp, NULL);
 	}
 #else
 	if (lseek(mp->fd, off, SEEK_SET) != off)
-		return (NULL);
+		_SAFE_RETURN(mp, NULL);
 	if ((nr = read(mp->fd, bp->page, mp->pagesize)) != mp->pagesize) {
 		if (nr >= 0)
 			errno = EFTYPE;
-		return (NULL);
+		_SAFE_RETURN(mp, NULL);
 	}
 #endif
 
@@ -280,7 +310,7 @@ mpool_get(mp, pgno, flags)
 	if (mp->pgin != NULL)
 		(mp->pgin)(mp->pgcookie, bp->pgno, bp->page);
 
-	return (bp->page);
+	_SAFE_RETURN(mp, bp->page);
 }
 
 /**
@@ -300,7 +330,9 @@ mpool_put(mp, page, flags)
 	BKT *bp;
 
 #ifdef STATISTICS
+	_MPOOL_RWLOCK_WRLOCK(mp);
 	++mp->pageput;
+	_MPOOL_RWLOCK_UNLOCK(mp);
 #endif
 	bp = (BKT *)((char *)page - sizeof(BKT));
 #ifdef DEBUG
@@ -326,12 +358,17 @@ mpool_close(mp)
 {
 	BKT *bp;
 
+	_MPOOL_RWLOCK_WRLOCK(mp);
 	/* Free up any space allocated to the lru pages. */
 	while ((bp = mp->lqh.cqh_first) != (void *)&mp->lqh) {
 		CIRCLEQ_REMOVE(&mp->lqh, mp->lqh.cqh_first, q);
 		free(bp);
 	}
 
+	_MPOOL_RWLOCK_UNLOCK(mp);
+#ifdef DB_CONCURRENT
+	(void)pthread_rwlock_destroy(&mp->rwlock);
+#endif
 	/* Free the MPOOL cookie. */
 	free(mp);
 	return (RET_SUCCESS);
@@ -349,6 +386,7 @@ mpool_sync(mp)
 {
 	BKT *bp;
 
+	_MPOOL_RWLOCK_WRLOCK(mp);
 	/* Walk the lru chain, flushing any dirty pages to disk. */
 	for (bp = mp->lqh.cqh_first;
 	    bp != (void *)&mp->lqh; bp = bp->q.cqe_next)
@@ -357,7 +395,10 @@ mpool_sync(mp)
 			return (RET_ERROR);
 
 	/* Sync the file descriptor. */
-	return (fsync(mp->fd) ? RET_ERROR : RET_SUCCESS);
+	if (fsync(mp->fd))
+		_SAFE_RETURN(mp, RET_ERROR);
+	else
+		_SAFE_RETURN(mp, RET_SUCCESS);
 }
 
 /**

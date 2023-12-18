@@ -16973,7 +16973,7 @@ if ac_fn_c_try_link "$LINENO"
 then :
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 printf "%s\n" "yes" >&6; }
-printf "%s\n" "#define HAVE_PTHREAD 1" >>confdefs.h
+printf "%s\n" "#define HAVE_PTHREAD_H 1" >>confdefs.h
 
 else $as_nop
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5

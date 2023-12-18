@@ -32,11 +32,12 @@
 #endif
 #include "gparam.h"
 #include "gtagsop.h"
+#include "threading.h"
 
 struct gtags_path {
 	char path[MAXPATHLEN];
 	const char *fid;
-	unsigned int seq;
+	int seqno;
 };
 
 struct gtags_path_proc_data {
@@ -74,8 +75,15 @@ struct gtags_priv_data {
 	struct gtags_path_add_data *add_data;	/* add path data, global */
 };
 
+/* misc data required by gtags jobs */
+typedef struct gtags_job_data {
+	void *priv_data; /* gtags_priv_data */
+	STRHASH *strhash;
+} GJOB_DATA;
+
 void gtags_proc_path(const char *, void *);
 void gtags_add_path(const char *, void *);
 void gtags_put_symbol(int , const char *, int , const char *, const char *, void *);
+void gtags_threading_proc_path(const char *, void *);
 
 #endif /* ! _GTAGS_HELPER_H_ */

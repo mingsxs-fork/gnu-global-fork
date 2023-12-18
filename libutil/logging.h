@@ -25,5 +25,6 @@
 void logging_printf(const char *s, ...);
 void logging_flush(void);
 void logging_arguments(int, char **);
+FILE *open_logging_handler(void);
 
 #endif /* ! _LOGGING_H_ */

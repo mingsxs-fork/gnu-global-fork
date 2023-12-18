@@ -53,17 +53,27 @@ Start
 
 See logging_printf() for more details.
 */
-static FILE *lp;
-static int ignore;
+static FILE *logging_handler = NULL;
+static int ignore = 0;
 
-static int
-logging_open(void)
+FILE *
+open_logging_handler(void)
 {
-	char *logfile = getenv("GTAGSLOGGING");
+	FILE *handler;
+	char *path;
 
-	if (logfile == NULL || (lp = fopen(logfile, "a")) == NULL)
-		return -1;
-	return 0;
+	if (logging_handler)
+		return logging_handler;
+
+	path = getenv("GTAGSLOGGING");
+	if (path != NULL && (handler = fopen(path, "a")) != NULL)
+		logging_handler = handler;
+	else {
+		logging_handler = stderr;
+		ignore = 1;  /* ignore */
+	}
+
+	return logging_handler;
 }
 /**
  * logging_printf: print a message into the logging file.
@@ -88,12 +98,11 @@ logging_printf(const char *s, ...)
 
 	if (ignore)
 		return;
-	if (lp == NULL && logging_open() < 0) {
-		ignore = 1;
-		return;
-	}
+	if (!logging_handler)
+		(void)open_logging_handler();
+
 	va_start(ap, s);
-	vfprintf(lp, s, ap);
+	vfprintf(logging_handler, s, ap);
 	va_end(ap);
 }
 /**
@@ -102,8 +111,8 @@ logging_printf(const char *s, ...)
 void
 logging_flush(void)
 {
-	if (lp)
-		fflush(lp);
+	if (logging_handler)
+		fflush(logging_handler);
 }
 
 /**

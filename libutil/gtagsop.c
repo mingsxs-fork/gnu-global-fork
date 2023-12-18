@@ -38,6 +38,11 @@
 #include <unistd.h>
 #endif
 
+#ifdef HAVE_PTHREAD_H
+#include <pthread>
+#include "threading.h"
+#endif
+
 #include "char.h"
 #include "checkalloc.h"
 #include "conf.h"
@@ -485,6 +490,12 @@ gtags_open(const char *dbpath, const char *root, int db, int mode, int flags)
  *	@param[in]	fid	file id
  *	@param[in]	img	line image
  */
+#ifdef USE_THREADING
+void
+gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const char *img)
+{
+}
+#else
 void
 gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const char *img)
 {
@@ -536,6 +547,7 @@ gtags_put_using(GTOP *gtop, const char *tag, int lno, const char *fid, const cha
 	strbuf_puts(gtop->sb, (gtop->format & GTAGS_COMPRESS) ? compress(img, key, gtop->sb_compress) : img);
 	dbop_put_tag(gtop->dbop, key, strbuf_value(gtop->sb));
 }
+#endif
 /**
  * gtags_flush: Flush the pool for compact format.
  *

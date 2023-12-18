@@ -92,7 +92,7 @@ gtags_put_symbol(int type, const char *tag, int lno, const char *path, const cha
 void
 gtags_proc_path(const char *path, void *data)
 {
-	static unsigned int seqno = 0;
+	static int seqno = 0;
 	struct gtags_priv_data *priv_data = data;
 	struct gtags_path gpath;  /* current gpath on stack */
 //	struct gtags_path *gpath_prev = priv_data->gpath; /* last gpath on stack */
@@ -112,7 +112,7 @@ gtags_proc_path(const char *path, void *data)
 	gpath.fid = gpath_path2fid(gpath.path, NULL);
 	if (gpath.fid == NULL)
 		die("GPATH is corrupted.('%s' not found)", gpath.path);
-	gpath.seq = ++seqno;
+	gpath.seqno = ++seqno;
 	priv_data->gpath = &gpath;
 //	set_file_parse_state(gpath.path, FILE_PARSE_PENDING);
 	parse_file(&gpath, priv_data->gconf.parser_flags, gtags_put_symbol, data);
@@ -126,7 +126,7 @@ gtags_proc_path(const char *path, void *data)
 void
 gtags_add_path(const char *path, void *data)
 {
-	static unsigned int seqno = 0;
+	static int seqno = 0;
 	struct gtags_priv_data *priv_data = data;
 	struct gtags_path gpath;
 	struct stat path_sb, *sbp = priv_data->add_data->path_sb;
@@ -155,12 +155,12 @@ gtags_add_path(const char *path, void *data)
 		if (gpath.fid == NULL){
 			strbuf_puts0(priv_data->add_data->addlist, gpath.path);
 			(*priv_data->npath_done)++;
-			gpath.seq = ++seqno;
+			gpath.seqno = ++seqno;
 		} else if (priv_data->add_data->gtag_sb->st_mtime < sbp->st_mtime) {
 			strbuf_puts0(priv_data->add_data->addlist, gpath.path);
 			idset_add(priv_data->add_data->delset, n_fid);
 			(*priv_data->npath_done)++;
-			gpath.seq = ++seqno;
+			gpath.seqno = ++seqno;
 		}
 	}
 }
