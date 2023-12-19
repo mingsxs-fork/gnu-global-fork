@@ -86,11 +86,11 @@ yacc(const struct parser_param *param)
 		sign = check_malloc(++parse_level);
 		memset(sign, '-', parse_level);
 		*(sign + parse_level - 1) = '\0';
-		message(" [%d] %s>START extracting YACC tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
+		message(" [%d] %s>START extracting YACC tags of %s\n", param->gpath->seqno, sign, trimpath(param->gpath->path));
 	}
 	C_family(param, TYPE_YACC);
 	if (priv_data->gconf.vflag) {
-		message(" [%d] %s>END extracting YACC tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
+		message(" [%d] %s>END extracting YACC tags of %s\n", param->gpath->seqno, sign, trimpath(param->gpath->path));
 		free(sign);
 		--parse_level;
 	}
@@ -109,11 +109,11 @@ C(const struct parser_param *param)
 		sign = check_malloc(++parse_level);
 		memset(sign, '-', parse_level);
 		*(sign + parse_level - 1) = '\0';
-		message(" [%d] %s>START extracting C tags of %s\n", param->gpath->seq, sign,trimpath(param->gpath->path));
+		message(" [%d] %s>START extracting C tags of %s\n", param->gpath->seqno, sign,trimpath(param->gpath->path));
 	}
 	C_family(param, TYPE_C);
 	if (priv_data->gconf.vflag) {
-		message(" [%d] %s>END extracting C tags of %s\n", param->gpath->seq, sign, trimpath(param->gpath->path));
+		message(" [%d] %s>END extracting C tags of %s\n", param->gpath->seqno, sign, trimpath(param->gpath->path));
 		free(sign);
 		--parse_level;
 	}

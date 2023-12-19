@@ -38,11 +38,6 @@
 #include <unistd.h>
 #endif
 
-#ifdef HAVE_PTHREAD_H
-#include <pthread>
-#include "threading.h"
-#endif
-
 #include "char.h"
 #include "checkalloc.h"
 #include "conf.h"

@@ -77,6 +77,7 @@ extern "C" {
 #define HARDWARE_MEMORY_BARRIER \
 	__sync_synchronize()
 
+/* SQLITE3 should support concurrent access itself */
 #if (!defined(USE_SQLITE3) && !defined(USE_THREADING))
 #define USE_THREADING 1 /* enable threading */
 #endif

@@ -67,23 +67,17 @@ void dbop3_close(DBOP *);
 #ifdef USE_THREADING
 #define _DBOP_RWLOCK_RDLOCK(dbop)	\
 	if (dbop->mode == 1)\
-		(void)pthread_rwlock_rdlock(dbop->rwlock)
-#define _DBOP_RWLOCK_RWLOCK(dbop)	\
+		(void)pthread_rwlock_rdlock(&dbop->rwlock)
+#define _DBOP_RWLOCK_WRLOCK(dbop)	\
 	if (dbop->mode == 1)\
-		(void)pthread_rwlock_wrlock(dbop->rwlock)
+		(void)pthread_rwlock_wrlock(&dbop->rwlock)
 #define _DBOP_RWLOCK_UNLOCK(dbop)	\
 	if (dbop->mode == 1)\
-		(void)pthread_rwlock_unlock(dbop->rwlock)
-#define _SAFE_RETURN(...) {\
-	if (GET_VA_ARG_1(__VA_ARGS__)->mode == 1)\
-		_DBOP_RWLOCK_UNLOCK(GET_VA_ARG_1(__VA_ARGS__));\
-	return (GET_ARGS_AFTER_1(__VA_ARGS__));\
-}
+		(void)pthread_rwlock_unlock(&dbop->rwlock)
 #else
 #define _DBOP_RWLOCK_RDLOCK(dbop)
-#define _DBOP_RWLOCK_RWLOCK(dbop)
+#define _DBOP_RWLOCK_WRLOCK(dbop)
 #define _DBOP_RWLOCK_UNLOCK(dbop)
-#define _SAFE_RETURN(...)	return (__VA_ARGS__)
 #endif
 
 /**
@@ -327,6 +321,11 @@ dbop_open(const char *path, int mode, int perm, int flags)
 	dbop->sortout	= NULL;
 	dbop->sortin	= NULL;
 	dbop->mode		= mode;
+#ifdef USE_THREADING
+	int r;
+	if (dbop->mode == 1 && (r = pthread_rwlock_init(&dbop->rwlock, NULL)) != 0)  /* GTAGS_CREATE */
+		die("dbop init rwlock failed, retcode: %d.", r);
+#endif
 	/*
 	 * Setup sorted writing.
 	 */
@@ -334,13 +333,6 @@ dbop_open(const char *path, int mode, int perm, int flags)
 		start_sort_process(dbop);
 #ifdef USE_SQLITE3
 finish:
-#endif
-#ifdef USE_THREADING
-	int r;
-	if (dbop->mode == 1) { /* GTAGS_CREATE */
-		if ((r = pthread_rwlock_init(&dbop->rwlock, NULL)) != 0)
-			die("dbop init rwlock failed, retcode: %d.", r);
-	}
 #endif
 	return dbop;
 }
@@ -369,6 +361,8 @@ dbop_get_generic(DBOP *dbop, void *name, size_t size)
 
 	_DBOP_RWLOCK_RDLOCK(dbop);
 	status = (*db->get)(db, &key, &dat, 0);
+	_DBOP_RWLOCK_UNLOCK(dbop);
+	_DBOP_RWLOCK_WRLOCK(dbop);
 	dbop->lastdat = (char *)dat.data;
 	dbop->lastsize = dat.size;
 	_DBOP_RWLOCK_UNLOCK(dbop);
@@ -410,14 +404,15 @@ dbop_put_generic(DBOP *dbop, void *name, size_t nsize, void *data, size_t dsize,
 		die("primary key size == 0.");
 	if (klen > MAXKEYLEN)
 		die("primary key too long.");
-	_DBOP_RWLOCK_RWLOCK(dbop);
 	/* sorted writing */
 	if (dbop->sortout != NULL) {
+		_DBOP_RWLOCK_WRLOCK(dbop);
 		fputs(name, dbop->sortout);
 		putc(SORT_SEP, dbop->sortout);
 		fputs(data, dbop->sortout);
 		putc('\n', dbop->sortout);
-		_SAFE_RETURN(dbop);
+		_DBOP_RWLOCK_UNLOCK(dbop);
+		return;
 	}
 	key.data = (char *)name;
 	key.size = nsize;
@@ -428,8 +423,9 @@ dbop_put_generic(DBOP *dbop, void *name, size_t nsize, void *data, size_t dsize,
 		dat.data = NULL;
 		dat.size = 0;
 	}
-
+	_DBOP_RWLOCK_WRLOCK(dbop);
 	status = (*db->put)(db, &key, &dat, flags);
+	_DBOP_RWLOCK_UNLOCK(dbop);
 	switch (status) {
 	case RET_SUCCESS:
 		break;
@@ -437,9 +433,10 @@ dbop_put_generic(DBOP *dbop, void *name, size_t nsize, void *data, size_t dsize,
 	case RET_SPECIAL:
 		if (flags == R_NOOVERWRITE)
 			break;
+		_DBOP_RWLOCK_RDLOCK(dbop);
 		die("%s", dbop->put_errmsg ? dbop->put_errmsg : "dbop_put failed.");
+		_DBOP_RWLOCK_UNLOCK(dbop);
 	}
-	_DBOP_RWLOCK_UNLOCK(dbop);
 }
 /**
  * dbop_put_tag: put a tag
@@ -510,7 +507,6 @@ dbop_put_path(DBOP *dbop, const char *name, const char *data, const char *flag)
 		die("primary key size == 0.");
 	if (len > MAXKEYLEN)
 		die("primary key too long.");
-	_DBOP_RWLOCK_RWLOCK(dbop);
 	strbuf_clear(sb);
 	strbuf_puts0(sb, data);
 	if (flag)
@@ -520,6 +516,7 @@ dbop_put_path(DBOP *dbop, const char *name, const char *data, const char *flag)
 	dat.data = strbuf_value(sb);
 	dat.size = strbuf_getlen(sb);
 
+	_DBOP_RWLOCK_WRLOCK(dbop);
 	status = (*db->put)(db, &key, &dat, 0);
 	_DBOP_RWLOCK_UNLOCK(dbop);
 	switch (status) {
@@ -527,7 +524,9 @@ dbop_put_path(DBOP *dbop, const char *name, const char *data, const char *flag)
 		break;
 	case RET_ERROR:
 	case RET_SPECIAL:
+		_DBOP_RWLOCK_RDLOCK(dbop);
 		die("%s", dbop->put_errmsg ? dbop->put_errmsg : "dbop_put_path failed.");
+		_DBOP_RWLOCK_UNLOCK(dbop);
 	}
 }
 /**
@@ -549,14 +548,14 @@ dbop_delete(DBOP *dbop, const char *path)
 		return;
 	}
 #endif
-	_DBOP_RWLOCK_RWLOCK(dbop);
+	_DBOP_RWLOCK_WRLOCK(dbop);
 	if (path) {
 		key.data = (char *)path;
 		key.size = strlen(path)+1;
 		status = (*db->del)(db, &key, 0);
 	} else
 		status = (*db->del)(db, &key, R_CURSOR);
-	_DBOP_RWLOCK_RWLOCK(dbop);
+	_DBOP_RWLOCK_UNLOCK(dbop);
 	if (status == RET_ERROR)
 		die("dbop_delete failed.");
 }
@@ -852,8 +851,8 @@ dbop_close(DBOP *dbop)
 	/*
 	 * Load sorted tag records and write them to the tag file.
 	 */
-	_DBOP_RWLOCK_RWLOCK(dbop);
 	if (dbop->sortout != NULL) {
+		_DBOP_RWLOCK_WRLOCK(dbop);
 		char *p;
 
 		/*
@@ -879,6 +878,7 @@ dbop_close(DBOP *dbop)
 		}
 		fclose(dbop->sortin);
 		terminate_sort_process(dbop);
+		_DBOP_RWLOCK_UNLOCK(dbop);
 	}
 #ifdef USE_SQLITE3
 	if (dbop->openflags & DBOP_SQLITE3) {
@@ -886,6 +886,7 @@ dbop_close(DBOP *dbop)
 		return;
 	}
 #endif
+	_DBOP_RWLOCK_WRLOCK(dbop);
 #ifdef USE_DB185_COMPAT
 	(void)db->close(db);
 #else
@@ -899,8 +900,11 @@ dbop_close(DBOP *dbop)
 			die("chmod(2) failed.");
 	}
 	_DBOP_RWLOCK_UNLOCK(dbop);
-	if (dbop->mode == 1)
-		(void)pthread_rwlock_destroy(&dbop->rwlock);
+#ifdef USE_THREADING
+	int r;
+	if (dbop->mode == 1 && (r = pthread_rwlock_destroy(&dbop->rwlock)) != 0)
+		die("dbop destroy rwlock failed, retcode: %d", r);
+#endif
 	(void)free(dbop);
 }
 

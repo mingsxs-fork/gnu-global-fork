@@ -56,7 +56,9 @@ void warning(const char *s, ...)
 	__attribute__ ((__format__ (__printf__, 1, 2)));
 void error(const char *s, ...)
 	__attribute__ ((__format__ (__printf__, 1, 2)));
+#if 0
 void debug(const char *s, ...)
 	__attribute__ ((__format__ (__printf__, 1, 2)));
+#endif
 
 #endif /* ! _DIE_H_ */

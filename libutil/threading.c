@@ -307,7 +307,7 @@ gtags_handle_job_cmd (JOB_MANAGER *manager, JOB_CMD *cmd)
 {
 	GJOB_DESC *job;
 	(void)pthread_rwlock_rdlock(&manager->rwlock);
-	job = = &manager->jobarray[cmd->index];
+	job = &manager->jobarray[cmd->index];
 	assert(pthread_equal(cmd->tid, job->tid));
 	switch (cmd->cmd) {
 		default:
@@ -414,7 +414,7 @@ job_manager_launch (JOB_MANAGER *manager)
 {
 	(void)pthread_mutex_lock(&manager->mutex);
 	(void)pthread_rwlock_wrlock(&manager->rwlock);
-	assert(manager && manager->state = JOB_MANAGER_STATE_READY);
+	assert(manager && manager->state == JOB_MANAGER_STATE_READY);
 	manager->launcher_tid = pthread_self(); /* launcher tid */
 	/* launch all handler jobs */
 	(void)pthread_create(&manager->sighandler_tid, NULL, gtags_job_sighandler, manager);
@@ -502,7 +502,7 @@ job_manager_launch_job (JOB_MANAGER *manager, void *(*routine)(void *), void *jo
 	(void)pthread_mutex_lock(&manager->mutex);
 	if ((job = find_unused_job(manager, &unused)) == NULL) { /* job array is now full */
 		(void)pthread_cond_wait(&manager->array_full, &manager->mutex);
-		job = find_unused_job(manager);
+		job = find_unused_job(manager, &unused);
 	}
 	assert(job && unused >= 0);
 	/* populate job descriptor */

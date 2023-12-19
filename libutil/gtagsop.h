@@ -24,6 +24,11 @@
 
 #include <stdio.h>
 
+#ifdef HAVE_PTHREAD_H
+#include <pthread.h>
+#include "threading.h"
+#endif
+
 #include "gparam.h"
 #include "dbop.h"
 #include "idset.h"

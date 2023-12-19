@@ -927,7 +927,7 @@ updatetags(const char *dbpath, const char *root, IDSET *deleteset, STRBUF *addli
 		gpath.fid = gpath_path2fid(gpath.path, NULL);
 		if (gpath.fid == NULL)
 			die("GPATH is corrupted.('%s' not found)", gpath.path);
-		gpath.seq = ++seqno;
+		gpath.seqno = ++seqno;
 		if (vflag)
 			message(" [%d/%d] extracting tags of %s\n", seqno, total, trimpath(gpath.path));
 		parse_file(&gpath, g_priv_data.gconf.parser_flags, gtags_put_symbol, &g_priv_data);

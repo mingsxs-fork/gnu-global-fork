@@ -58,15 +58,10 @@ static char sccsid[] = "@(#)mpool.c	8.5 (Berkeley) 7/26/94";
 #define _MPOOL_RWLOCK_RDLOCK(mp)	(void)pthread_rwlock_rdlock(mp->rwlock)
 #define _MPOOL_RWLOCK_WRLOCK(mp)	(void)pthread_rwlock_wrlock(mp->rwlock)
 #define _MPOOL_RWLOCK_UNLOCK(mp)	(void)pthread_rwlock_unlock(mp->rwlock)
-#define _SAFE_RETURN(...)	{\
-	_MPOOL_RWLOCK_UNLOCK(GET_VA_ARG_1(__VA_ARGS__)); \
-	return (GET_ARGS_AFTER_1(__VA_ARGS__));\
-}
 #else
 #define _MPOOL_RWLOCK_RDLOCK(mp)
 #define _MPOOL_RWLOCK_WRLOCK(mp)
 #define _MPOOL_RWLOCK_UNLOCK(mp)
-#define _SAFE_RETURN(...)	return (__VA_ARGS__)
 #endif
 
 #define	__MPOOLINTERFACE_PRIVATE
@@ -122,7 +117,7 @@ mpool_open(key, fd, pagesize, maxcache)
 #ifdef DB_CONCURRENT
 	/* init concurrent sync locks */
 	int r;
-	if ((r = pthread_rwlock_init(&mp->rwlock)) != 0)
+	if ((r = pthread_rwlock_init(&mp->rwlock, NULL)) != 0)
 		die("mpool init rwlock failed, retcode: %d.", r);
 #endif
 	return (mp);
@@ -165,6 +160,7 @@ mpool_new(mp, pgnoaddr)
 {
 	struct _hqh *head;
 	BKT *bp;
+	void *r = NULL;
 
 	_MPOOL_RWLOCK_WRLOCK(mp);
 	if (mp->npages == MAX_PAGE_NUMBER) {
@@ -180,14 +176,17 @@ mpool_new(mp, pgnoaddr)
 	 * and return.
 	 */
 	if ((bp = mpool_bkt(mp)) == NULL)
-		_SAFE_RETURN(mp, NULL);
+		goto defer;
 	*pgnoaddr = bp->pgno = mp->npages++;
 	bp->flags = MPOOL_PINNED;
 
 	head = &mp->hqh[HASHKEY(bp->pgno)];
 	CIRCLEQ_INSERT_HEAD(head, bp, hq);
 	CIRCLEQ_INSERT_TAIL(&mp->lqh, bp, q);
-	_SAFE_RETURN(mp, (bp->page));
+	r = bp->page;
+defer:
+	_MPOOL_RWLOCK_UNLOCK(mp);
+	return r;
 }
 
 /**
@@ -208,12 +207,13 @@ mpool_get(mp, pgno, flags)
 	BKT *bp;
 	off_t off;
 	int nr;
+	void *r = NULL;
 
 	/* Check for attempt to retrieve a non-existent page. */
 	_MPOOL_RWLOCK_RDLOCK(mp);
 	if (pgno >= mp->npages) {
 		errno = EINVAL;
-		_SAFE_RETURN(mp, NULL);
+		goto defer;
 	}
 
 #ifdef STATISTICS
@@ -246,14 +246,15 @@ mpool_get(mp, pgno, flags)
 
 		/* Return a pinned page. */
 		bp->flags |= MPOOL_PINNED;
-		_SAFE_RETURN(mp, (bp->page));
+		r = bp->page;
+		goto defer;
 	}
 
 	/* Get a page from the cache. */
 	_MPOOL_RWLOCK_UNLOCK(mp);
 	_MPOOL_RWLOCK_WRLOCK(mp);
 	if ((bp = mpool_bkt(mp)) == NULL)
-		_SAFE_RETURN(mp, NULL);
+		goto defer;
 
 	/* Read in the contents. */
 #ifdef STATISTICS
@@ -282,15 +283,15 @@ mpool_get(mp, pgno, flags)
 	if ((nr = pread(mp->fd, bp->page, mp->pagesize, off)) != mp->pagesize) {
 		if (nr >= 0)
 			errno = EFTYPE;
-		_SAFE_RETURN(mp, NULL);
+		goto defer;
 	}
 #else
 	if (lseek(mp->fd, off, SEEK_SET) != off)
-		_SAFE_RETURN(mp, NULL);
+		goto defer;
 	if ((nr = read(mp->fd, bp->page, mp->pagesize)) != mp->pagesize) {
 		if (nr >= 0)
 			errno = EFTYPE;
-		_SAFE_RETURN(mp, NULL);
+		goto defer;
 	}
 #endif
 
@@ -310,7 +311,10 @@ mpool_get(mp, pgno, flags)
 	if (mp->pgin != NULL)
 		(mp->pgin)(mp->pgcookie, bp->pgno, bp->page);
 
-	_SAFE_RETURN(mp, bp->page);
+	r = bp->page;
+defer:
+	_MPOOL_RWLOCK_UNLOCK(mp);
+	return r;
 }
 
 /**
@@ -385,6 +389,7 @@ mpool_sync(mp)
 	MPOOL *mp;
 {
 	BKT *bp;
+	int r = RET_SUCCESS;
 
 	_MPOOL_RWLOCK_WRLOCK(mp);
 	/* Walk the lru chain, flushing any dirty pages to disk. */
@@ -396,9 +401,9 @@ mpool_sync(mp)
 
 	/* Sync the file descriptor. */
 	if (fsync(mp->fd))
-		_SAFE_RETURN(mp, RET_ERROR);
-	else
-		_SAFE_RETURN(mp, RET_SUCCESS);
+		r = RET_ERROR;
+	_MPOOL_RWLOCK_UNLOCK(mp);
+	return r;
 }
 
 /**

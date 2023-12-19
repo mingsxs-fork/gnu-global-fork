@@ -76,10 +76,6 @@ die(const char *s, ...)
 		va_end(ap);
 		fputs("\n", handler);
 	}
-#ifdef USE_THREADING
-	if (is_job_thread()) {
-	}
-#endif
 
 	if (exit_proc)
 		(*exit_proc)();
@@ -103,10 +99,6 @@ die_with_code(int n, const char *s, ...)
 		va_end(ap);
 		fputs("\n", handler);
 	}
-#ifdef USE_THREADING
-	if (is_job_thread()) {
-	}
-#endif
 	if (exit_proc)
 		(*exit_proc)();
 	if (debug)
@@ -162,7 +154,7 @@ error(const char *s, ...)
 		fputs("\n", handler);
 	}
 }
-
+#if 0
 void
 debug(const char *s, ...)
 {
@@ -179,3 +171,4 @@ debug(const char *s, ...)
 		fputs("\n", handler);
 	}
 }
+#endif

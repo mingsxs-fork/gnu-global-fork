@@ -457,7 +457,7 @@ skipthisfile(const char *path)
 			if (m.rm_eo == len)
 				strbuf_putc(sb, ']');
 			strbuf_puts(sb, " => SKIPPED\n");
-			message(strbuf_value(sb));
+			message("%s", strbuf_value(sb));
 		}
 		if (find_explain) {
 			int type = getreason(path);
